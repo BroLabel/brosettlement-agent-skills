@@ -1,0 +1,4 @@
+interface:
+  display_name: "BroSettlement Onboarding"
+  short_description: "Interactive Co-Signer and MPC setup wizard"
+  default_prompt: "Use $brosettlement-onboarding to guide me step by step through a new BroSettlement setup."

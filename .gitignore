@@ -1,0 +1,22 @@
+# Build output
+/dist/
+brosettlement-api/scripts/go/brosettlement
+brosettlement-api/scripts/go/bin/
+
+# Runtime logs and event captures
+*.log
+*.jsonl
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+private.pem
+*.private.pem
+*.key
+shares/
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/

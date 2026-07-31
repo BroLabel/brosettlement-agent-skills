@@ -1,0 +1,4 @@
+interface:
+  display_name: "BroSettlement API"
+  short_description: "Swagger-driven REST and WebSocket Go tools"
+  default_prompt: "Use $brosettlement-api to inspect the current staging Swagger and implement a signed BroSettlement integration."
