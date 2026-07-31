@@ -45,7 +45,8 @@ Follow these checkpoints in order:
 2. Admin-panel URL copied from the browser page where the user registered and can see the organization.
 3. Explicit Co-Signer installation folder selected.
 4. Host prerequisites confirmed.
-5. Dedicated Ed25519 key pair generated without overwriting existing keys.
+5. Dedicated Ed25519 key pair generated without overwriting existing keys, with the complete
+   public PEM shown to the user for copying into Console.
 6. Dedicated API key created with the three required MPC permissions.
 7. Official Co-Signer source installed, tested, and built.
 8. Persistent shares storage and separate encryption key protected.
@@ -80,14 +81,18 @@ openssl pkey -in private.pem -pubout -out public.pem
 chmod 600 private.pem
 ```
 
-Only register `public.pem` with BroSettlement. Keep `private.pem` on client-controlled infrastructure.
+Immediately read `public.pem` and show its complete contents in a fenced `pem` block, including
+both boundary lines. Tell the user to copy the entire displayed block into **Public key (PEM)**
+in BroSettlement Console. Do not provide only a filename or file link. Only the public key may be
+shown; keep `private.pem` on client-controlled infrastructure and never display its contents.
 
 ## 2. Instruct the user to create the Co-Signer API key
 
 Give the user these manual BroSettlement Console instructions:
 
 1. Open **API Keys** and create a dedicated key.
-2. Upload or paste `public.pem`.
+2. Copy the complete public PEM block displayed by the agent and paste it into **Public key
+   (PEM)**, including the `BEGIN PUBLIC KEY` and `END PUBLIC KEY` lines.
 3. Follow every network and allowlist instruction shown on the API-key creation page.
 4. Enable all three MPC permissions:
    - **Initialize MPC**

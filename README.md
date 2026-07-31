@@ -43,8 +43,24 @@ cd brosettlement-agent-skills
 ./install.sh --target /absolute/path/to/agent-skills
 ```
 
-The installer refuses to overwrite an existing skill directory. Review and remove or rename an
-old installation yourself before reinstalling.
+The installer refuses to overwrite an existing or unrecognized skill directory. Installations
+created by this script can be upgraded only when their tracked files are unchanged:
+
+```bash
+./install.sh --target /absolute/path/to/agent-skills --update
+```
+
+Preview removal of both skills, then repeat with explicit confirmation:
+
+```bash
+./uninstall.sh --target /absolute/path/to/agent-skills --all
+./uninstall.sh --target /absolute/path/to/agent-skills --all --confirm
+```
+
+Use `--skill brosettlement-onboarding` or `--skill brosettlement-api` to remove one skill. The
+uninstaller recognizes only installations created by `install.sh` and refuses to remove modified
+files unless both `--force-modified` and `--confirm` are supplied. AI agents must never uninstall
+or force-remove a modified skill without an explicit user request.
 
 ## Unified Go CLI
 

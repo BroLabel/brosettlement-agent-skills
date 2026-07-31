@@ -123,7 +123,14 @@ Before generation:
 - never overwrite keys;
 - ask whether to use a confirmed existing Ed25519 pair or choose new filenames when a collision exists.
 
-Show or copy only the public key. Never print, upload, or paste the private key into chat.
+After generation, read `public.pem` and immediately show its complete contents to the user in a
+fenced `pem` block. Include the `-----BEGIN PUBLIC KEY-----` and `-----END PUBLIC KEY-----`
+lines. Tell the user to copy that entire block into the Console field labeled **Public key
+(PEM)**. A public key is safe to display; the private key is not.
+
+Do not merely link to or name the local public-key file, because the user's Console may be in a
+different environment and its **Public key (PEM)** control expects pasted PEM text. Never print,
+upload, or paste the private key into chat.
 
 ### 5. Instruct the user to create the Co-Signer API key
 
@@ -132,7 +139,8 @@ Tell the user to perform these steps manually in BroSettlement Console:
 1. Open **API Keys**.
 2. Select **Create API key**.
 3. Use a recognizable name such as `Testnet Co-Signer`.
-4. Upload or paste the generated public key.
+4. Copy the complete PEM block shown in the chat and paste it into **Public key (PEM)**, including
+   its `BEGIN PUBLIC KEY` and `END PUBLIC KEY` lines.
 5. Follow every network and allowlist instruction shown on the API-key creation page.
 6. Expand **MPC** and enable exactly:
    - **Initialize MPC**

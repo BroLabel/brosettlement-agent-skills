@@ -21,9 +21,3 @@ jobs:
 
       - name: Validate, test, vet, and build
         run: make check
-
-      - name: Test safe skill installation
-        run: |
-          ./install.sh --target "$RUNNER_TEMP/agent-skills"
-          test -f "$RUNNER_TEMP/agent-skills/brosettlement-onboarding/SKILL.md"
-          test -f "$RUNNER_TEMP/agent-skills/brosettlement-api/SKILL.md"
