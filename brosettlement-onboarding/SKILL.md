@@ -230,20 +230,37 @@ initialization attempts blindly.
 
 After MPC readiness:
 
-1. Ask the user to confirm that a separate integration API key has `wallets:create`,
-   `wallets:read`, and `accounts:read`. Do not add these scopes to the long-running Co-Signer key
-   by default.
-2. If a key is needed, generate a separate Ed25519 pair only with the required local
-   confirmation, then give the user manual Console instructions for creating the integration API
-   key. Never create or edit that API key yourself.
-3. Use `$brosettlement-api` to inspect and call `POST /api/v1/ledger/accounts`.
-4. Verify the ledger account with `GET /api/v1/ledger/accounts/{accountId}`.
-5. Use `$brosettlement-api` to inspect and call `POST /api/v1/wallets` for a ready testnet chain
+1. Ask only whether the user already has a separate integration API key, with its matching private
+   key stored locally, that has exactly `wallets:create`, `wallets:read`, and `accounts:read`. Do
+   not add these scopes to the long-running Co-Signer key by default.
+2. If the answer is **No**, ask only:
+
+   > May I generate a new, separate Ed25519 key pair for the integration API key in
+   > `<proposed-protected-directory>`?
+
+   Resolve the proposed path before asking. Wait for explicit confirmation. If the user declines,
+   ask whether they want to choose another protected path or provide an existing integration key.
+3. After confirmation, generate the separate pair with distinct filenames such as
+   `integration-api-private.pem` and `integration-api-public.pem`. Apply the collision and private
+   key protections from checkpoint 4. Never reuse or overwrite the Co-Signer key pair.
+4. Immediately read `integration-api-public.pem` and show its complete contents in a fenced `pem`
+   block, including both boundary lines. Tell the user to copy the displayed block into **Public
+   key (PEM)** while manually creating a new integration API key in Console. Instruct the user to
+   use a recognizable name such as `Testnet Integration`, follow all network and allowlist fields
+   shown on the page, select exactly `wallets:create`, `wallets:read`, and `accounts:read`, create
+   and activate the key, and place its API Key ID in the approved runtime environment. Never show
+   the integration private key or operate the Console.
+5. Pause until the user confirms the integration key is active, all three scopes are selected,
+   and its matching credentials are available to `$brosettlement-api`. If the answer in step 1
+   was **Yes**, obtain the same confirmation without generating another pair.
+6. Use `$brosettlement-api` to inspect and call `POST /api/v1/ledger/accounts`.
+7. Verify the ledger account with `GET /api/v1/ledger/accounts/{accountId}`.
+8. Use `$brosettlement-api` to inspect and call `POST /api/v1/wallets` for a ready testnet chain
    such as **TRON Nile**.
-6. Confirm the wallet becomes **Active**.
-7. Offer to test a small deposit and withdrawal using `$brosettlement-api`.
-8. Reconcile the resulting lifecycle with REST, WebSocket events, and ledger records.
-9. Configure monitoring and encrypted-share backups before mainnet.
+9. Confirm the wallet becomes **Active**.
+10. Offer to test a small deposit and withdrawal using `$brosettlement-api`.
+11. Reconcile the resulting lifecycle with REST, WebSocket events, and ledger records.
+12. Configure monitoring and encrypted-share backups before mainnet.
 
 ## Operating rules
 
