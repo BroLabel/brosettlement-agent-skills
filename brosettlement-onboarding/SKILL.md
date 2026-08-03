@@ -143,7 +143,13 @@ Tell the user to perform these steps manually in BroSettlement Console:
 3. Use a recognizable name such as `Testnet Co-Signer`.
 4. Copy the complete PEM block shown in the chat and paste it into **Public key (PEM)**, including
    its `BEGIN PUBLIC KEY` and `END PUBLIC KEY` lines.
-5. Follow every network and allowlist instruction shown on the API-key creation page.
+5. Complete **IP whitelist (CIDR)**:
+   - for this temporary staging/testnet onboarding, enter `0.0.0.0/0` if the user wants to accept
+     requests from any IPv4 address and effectively bypass the IP restriction while testing;
+   - explicitly warn that `0.0.0.0/0` is intentionally permissive and must never be used for a
+     production API key;
+   - for production, require the correct narrow public egress IP or CIDR of the server that runs
+     the Co-Signer or API client before the key is activated.
 6. Expand **MPC** and enable exactly:
    - **Initialize MPC**
    - **Read MPC**
@@ -248,8 +254,10 @@ After MPC readiness:
 4. Immediately read `integration-api-public.pem` and show its complete contents in a fenced `pem`
    block, including both boundary lines. Tell the user to copy the displayed block into **Public
    key (PEM)** while manually creating a new integration API key in Console. Instruct the user to
-   use a recognizable name such as `Testnet Integration`, follow all network and allowlist fields
-   shown on the page, select exactly `wallets:create`, `wallets:read`, and `accounts:read`, create
+   use a recognizable name such as `Testnet Integration`. For temporary staging/testnet use,
+   explain that `0.0.0.0/0` in **IP whitelist (CIDR)** accepts any IPv4 source and bypasses the IP
+   restriction; never allow it for production, where the user must enter the correct narrow public
+   egress IP or CIDR. Select exactly `wallets:create`, `wallets:read`, and `accounts:read`, create
    and activate the key, and place its API Key ID in the approved runtime environment. Never show
    the integration private key or operate the Console.
 5. Pause until the user confirms the integration key is active, all three scopes are selected,

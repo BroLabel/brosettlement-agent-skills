@@ -14,6 +14,8 @@ validate:
 	@grep -q 'integration-api-public.pem' brosettlement-onboarding/SKILL.md
 	@grep -q 'https://nileex.io/join/getJoinPage' brosettlement-onboarding/SKILL.md
 	@grep -q 'https://developers.tron.network/docs/getting-testnet-tokens-on-tron' brosettlement-onboarding/SKILL.md
+	@grep -q '0.0.0.0/0' brosettlement-onboarding/SKILL.md
+	@grep -q 'must never be used' brosettlement-onboarding/SKILL.md
 	@grep -q 'brosettlement update --auto' brosettlement-api/SKILL.md
 	@grep -q 'never update `SKILL.md`' brosettlement-api/SKILL.md
 	@test -x brosettlement-api/scripts/build-cli.sh

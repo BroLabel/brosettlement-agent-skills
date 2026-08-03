@@ -93,7 +93,11 @@ Give the user these manual BroSettlement Console instructions:
 1. Open **API Keys** and create a dedicated key.
 2. Copy the complete public PEM block displayed by the agent and paste it into **Public key
    (PEM)**, including the `BEGIN PUBLIC KEY` and `END PUBLIC KEY` lines.
-3. Follow every network and allowlist instruction shown on the API-key creation page.
+3. Complete **IP whitelist (CIDR)**. During temporary staging/testnet onboarding, the user may
+   enter `0.0.0.0/0` to accept requests from any IPv4 address and effectively bypass the IP
+   restriction while testing. State clearly that this is intentionally permissive. Never use
+   `0.0.0.0/0` for production; require the correct narrow public egress IP or CIDR of the server
+   running the Co-Signer or API client before activating a production key.
 4. Enable all three MPC permissions:
    - **Initialize MPC**
    - **Read MPC**
