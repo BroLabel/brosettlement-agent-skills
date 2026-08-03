@@ -258,9 +258,30 @@ After MPC readiness:
 8. Use `$brosettlement-api` to inspect and call `POST /api/v1/wallets` for a ready testnet chain
    such as **TRON Nile**.
 9. Confirm the wallet becomes **Active**.
-10. Offer to test a small deposit and withdrawal using `$brosettlement-api`.
-11. Reconcile the resulting lifecycle with REST, WebSocket events, and ledger records.
-12. Configure monitoring and encrypted-share backups before mainnet.
+10. Ask: **Would you like to test a small TRON Nile deposit next?** If the answer is **Yes**:
+    - use `$brosettlement-api` to confirm the wallet is **Active**, its network is exactly TRON
+      Nile, and the proposed asset is currently returned by `GET /api/v1/assets`;
+    - show the wallet's public deposit address, the network, and the supported test asset;
+    - give the user the [TRON Nile faucet](https://nileex.io/join/getJoinPage), the official
+      [TRON testnet-token guide](https://developers.tron.network/docs/getting-testnet-tokens-on-tron)
+      for documented community faucet alternatives, and the
+      [Nile explorer](https://nile.tronscan.org) for public transaction verification;
+    - explain that the user may request the supported test asset from a faucet or send it from an
+      external testnet wallet. A faucet needs only the public Nile address. Never ask for or enter
+      a seed phrase or private key, and never use mainnet funds;
+    - snapshot the wallet balance and ledger entries, then ask the user to complete the faucet or
+      external-wallet transfer and confirm when it has been broadcast. The user may provide the
+      public transaction hash, but it is optional;
+    - monitor the wallet balance and ledger entries with `wallets:read`. If the key also has
+      `transactions:read`, reconcile the deposit transaction; if it has `websockets:read`, the
+      WebSocket stream may supplement polling. Confirm the balance delta and final ledger entry.
+    - do not call `POST /api/v1/transactions` for a deposit; that endpoint creates an outgoing
+      transaction.
+11. Offer a small withdrawal separately. Before any withdrawal, provide manual Console
+    instructions for the current required scopes, wait for confirmation, and obtain explicit
+    authorization for the state-changing request.
+12. Reconcile completed tests with REST, optional WebSocket events, and ledger records.
+13. Configure monitoring and encrypted-share backups before mainnet.
 
 ## Operating rules
 

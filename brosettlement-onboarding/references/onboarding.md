@@ -181,9 +181,23 @@ Require all of the following before wallet creation:
 6. Create a wallet linked to that account through `$brosettlement-api` and read it back by ID.
 7. Choose a ready testnet chain such as TRON Nile.
 8. Confirm the wallet becomes **Active**.
-9. Test a small deposit and withdrawal only after adding the current transaction scopes to a
-   suitable integration key.
-10. Confirm the ledger and transaction lifecycle match the on-chain result.
+9. If the user wants to test a TRON Nile deposit, confirm the selected asset is returned by
+   `GET /api/v1/assets`, then show the public deposit address and these resources:
+   - [TRON Nile faucet](https://nileex.io/join/getJoinPage);
+   - official [TRON testnet-token guide](https://developers.tron.network/docs/getting-testnet-tokens-on-tron),
+     which documents community faucet alternatives;
+   - [Nile explorer](https://nile.tronscan.org) for checking the public transaction.
+10. Tell the user to enter only the public TRON Nile address in a faucet. Never request a seed
+    phrase or private key, and never use mainnet funds for this test.
+11. Record the balance and ledger state before the transfer. The user then requests the supported
+    asset from a faucet or sends it from an external testnet wallet and confirms broadcast. A
+    public transaction hash is helpful but optional.
+12. Poll balances and ledger entries through `$brosettlement-api`. If the integration key has
+    `transactions:read`, reconcile the deposit transaction; `websockets:read` may optionally
+    supplement polling. Never call `POST /api/v1/transactions` to create a deposit.
+13. Offer a small withdrawal as a separate, explicitly confirmed operation, only after the user
+    has manually added the current required scopes to a suitable integration key.
+14. Confirm the ledger and transaction lifecycle match the on-chain result.
 
 ## Storage, backup, and recovery
 

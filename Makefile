@@ -12,6 +12,8 @@ validate:
 	@grep -q 'Public key (PEM)' brosettlement-onboarding/SKILL.md
 	@grep -q 'fenced `pem` block' brosettlement-onboarding/SKILL.md
 	@grep -q 'integration-api-public.pem' brosettlement-onboarding/SKILL.md
+	@grep -q 'https://nileex.io/join/getJoinPage' brosettlement-onboarding/SKILL.md
+	@grep -q 'https://developers.tron.network/docs/getting-testnet-tokens-on-tron' brosettlement-onboarding/SKILL.md
 
 lifecycle-test:
 	./tests/install-uninstall.sh
