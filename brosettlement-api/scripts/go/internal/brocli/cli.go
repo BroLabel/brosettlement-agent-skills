@@ -11,6 +11,8 @@ import (
 const usage = `BroSettlement Integration API CLI (staging by default)
 
 Usage:
+  brosettlement version [--json]
+  brosettlement update [--auto]
   brosettlement commands [QUERY] [--json]
   brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]
   brosettlement mpc status
@@ -34,6 +36,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 	var err error
 	switch strings.ToLower(args[0]) {
+	case "version":
+		err = runVersion(args[1:], stdout, stderr)
+	case "update":
+		err = runUpdate(args[1:], stdout, stderr)
 	case "commands":
 		err = runCommands(args[1:], stdout, stderr)
 	case "api":

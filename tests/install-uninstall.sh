@@ -11,6 +11,9 @@ target="$test_root/skills"
 test -f "$target/brosettlement-onboarding/.brosettlement-installed"
 test -f "$target/brosettlement-api/.brosettlement-manifest"
 
+# A generated or self-updated CLI binary is runtime state, not a skill modification.
+mkdir -p "$target/brosettlement-api/scripts/go/bin"
+printf '%s\n' "test binary" > "$target/brosettlement-api/scripts/go/bin/brosettlement"
 "$repo/install.sh" --target "$target" --update
 
 "$repo/uninstall.sh" --target "$target" --all
@@ -34,8 +37,12 @@ test ! -e "$target/brosettlement-onboarding"
 test ! -e "$target/brosettlement-api"
 
 "$repo/install.sh" --target "$target"
+mkdir -p "$target/brosettlement-api/scripts/go/bin"
+printf '%s\n' "test binary" > "$target/brosettlement-api/scripts/go/bin/brosettlement"
 "$repo/uninstall.sh" --target "$target" --skill brosettlement-onboarding --confirm
 test ! -e "$target/brosettlement-onboarding"
 test -d "$target/brosettlement-api"
+"$repo/uninstall.sh" --target "$target" --skill brosettlement-api --confirm
+test ! -e "$target/brosettlement-api"
 
 printf '%s\n' "Install/update/uninstall lifecycle tests passed"

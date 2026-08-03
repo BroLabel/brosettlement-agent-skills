@@ -14,6 +14,7 @@ manifest_for() {
     find . -type f \
       ! -name '.brosettlement-installed' \
       ! -name '.brosettlement-manifest' \
+      ! -path './scripts/go/bin/*' \
       -exec cksum {} \; | LC_ALL=C sort
   ) > "$output"
 }

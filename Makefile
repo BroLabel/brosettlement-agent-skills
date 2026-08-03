@@ -14,6 +14,10 @@ validate:
 	@grep -q 'integration-api-public.pem' brosettlement-onboarding/SKILL.md
 	@grep -q 'https://nileex.io/join/getJoinPage' brosettlement-onboarding/SKILL.md
 	@grep -q 'https://developers.tron.network/docs/getting-testnet-tokens-on-tron' brosettlement-onboarding/SKILL.md
+	@grep -q 'brosettlement update --auto' brosettlement-api/SKILL.md
+	@grep -q 'never update `SKILL.md`' brosettlement-api/SKILL.md
+	@test -x brosettlement-api/scripts/build-cli.sh
+	@test -f .github/workflows/release-cli.yml
 
 lifecycle-test:
 	./tests/install-uninstall.sh
@@ -26,4 +30,6 @@ vet:
 
 build:
 	mkdir -p dist
-	cd $(GO_DIR) && go build -o ../../../dist/brosettlement ./cmd/brosettlement
+	cd $(GO_DIR) && go build -trimpath \
+		-ldflags "-X github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/brocli.Version=0.0.0-dev -X github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/brocli.Commit=local" \
+		-o ../../../dist/brosettlement ./cmd/brosettlement

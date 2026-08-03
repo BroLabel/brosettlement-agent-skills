@@ -39,20 +39,22 @@ generated examples, or shell history.
 
 ## Workflow
 
-1. Default to staging and state that explicitly.
-2. Fetch the current Swagger JSON before answering endpoint, command, field, enum, scope, or error-schema questions.
-3. Identify the exact operation, request schema, response schema, required scope, authentication headers, body-hash requirement, and idempotency requirement.
-4. Resolve credentials through the credential protocol and verify prerequisites without printing secrets.
-5. Prepare a redacted request plan: environment, method, exact target, scope, body source, idempotency behavior, and expected success response.
-6. Run a safe read-only authentication probe before the first mutation when an applicable read scope exists.
-7. Serialize the request body exactly once and hash the exact bytes that will be sent.
-8. Build the canonical string with the exact request target, including the raw query string.
-9. Ask for confirmation immediately before create, withdrawal, MPC initialization, signing, or another state-changing request.
-10. Sign and send the confirmed request once with all required headers.
-11. Validate the HTTP status and parse errors using the documented error schema.
-12. Verify the resulting resource or lifecycle through a read endpoint and, when relevant, WebSocket events.
-13. For uncertain outcomes, read the resource or status before retrying. Reuse the same idempotency key only for the identical logical request.
-14. Report the operation, target environment, status, identifiers, and verification result without exposing secrets.
+1. Prepare the bundled CLI and run its automatic version gate as described below. This may update
+   only the compiled CLI executable; never update `SKILL.md`, references, scripts, or sibling skills.
+2. Default to staging and state that explicitly.
+3. Fetch the current Swagger JSON before answering endpoint, command, field, enum, scope, or error-schema questions.
+4. Identify the exact operation, request schema, response schema, required scope, authentication headers, body-hash requirement, and idempotency requirement.
+5. Resolve credentials through the credential protocol and verify prerequisites without printing secrets.
+6. Prepare a redacted request plan: environment, method, exact target, scope, body source, idempotency behavior, and expected success response.
+7. Run a safe read-only authentication probe before the first mutation when an applicable read scope exists.
+8. Serialize the request body exactly once and hash the exact bytes that will be sent.
+9. Build the canonical string with the exact request target, including the raw query string.
+10. Ask for confirmation immediately before create, withdrawal, MPC initialization, signing, or another state-changing request.
+11. Sign and send the confirmed request once with all required headers.
+12. Validate the HTTP status and parse errors using the documented error schema.
+13. Verify the resulting resource or lifecycle through a read endpoint and, when relevant, WebSocket events.
+14. For uncertain outcomes, read the resource or status before retrying. Reuse the same idempotency key only for the identical logical request.
+15. Report the operation, target environment, status, identifiers, and verification result without exposing secrets.
 
 ## Canonical signing invariants
 
@@ -73,15 +75,30 @@ and the compatibility exceptions in this skill.
 
 ## Use the bundled CLI
 
-Use the unified Go CLI as the default execution surface. Run it from `scripts/go` during skill
-execution, or build the same command into a user-approved local bin directory:
+Use the unified Go CLI as the default execution surface. On the first request, or when the binary
+is missing, build it from the bundled source:
 
 ```bash
-cd scripts/go
-go run ./cmd/brosettlement --help
-mkdir -p ./bin
-go build -o ./bin/brosettlement ./cmd/brosettlement
+./scripts/build-cli.sh
 ```
+
+At the start of every request that activates this skill, run exactly one automatic update check
+before any BroSettlement API operation:
+
+```bash
+./scripts/go/bin/brosettlement update --auto
+./scripts/go/bin/brosettlement version
+```
+
+The updater accepts only published `cli-vMAJOR.MINOR.PATCH` GitHub Releases from the official
+repository, selects the current OS/architecture binary, verifies `checksums.txt` and any GitHub
+SHA-256 asset digest, verifies the downloaded CLI-reported version, and atomically replaces only
+the current executable. It must never pull, clone, rewrite, or update skill content.
+
+If GitHub is unavailable, no published CLI release exists yet, the platform is unsupported, the
+checksum fails, or the executable directory is not writable, report the skipped update briefly
+and continue with the installed CLI when it supports the required command. Never weaken checksum
+or source validation to make an update succeed.
 
 Keep `cmd/list-commands`, `cmd/api-request`, and `cmd/ws-listener` only as legacy-compatible entry
 points. Do not assemble signatures with ad hoc shell commands when the unified CLI is available.
@@ -92,10 +109,9 @@ Use the Go command lister whenever the user asks what is available or asks for a
 topic. It fetches Swagger on every run.
 
 ```bash
-cd scripts/go
-go run ./cmd/brosettlement commands
-go run ./cmd/brosettlement commands wallets
-go run ./cmd/brosettlement commands "ledger balance" --json
+./scripts/go/bin/brosettlement commands
+./scripts/go/bin/brosettlement commands wallets
+./scripts/go/bin/brosettlement commands "ledger balance" --json
 ```
 
 Return matching HTTP methods, paths, and Swagger summaries. Then inspect the selected operation in
@@ -107,13 +123,12 @@ when live staging Swagger is reachable.
 Prefer the Go request client:
 
 ```bash
-cd scripts/go
 export BROSETTLEMENT_API_KEY_ID="<uuid>"
 export BROSETTLEMENT_API_PRIVATE_KEY_FILE="/secure/path/private.pem"
 
-go run ./cmd/brosettlement api GET '/api/v1/wallets'
+./scripts/go/bin/brosettlement api GET '/api/v1/wallets'
 
-go run ./cmd/brosettlement api POST '/api/v1/wallets' \
+./scripts/go/bin/brosettlement api POST '/api/v1/wallets' \
   --body-file /secure/path/create-wallet.json \
   --confirm
 ```
@@ -139,8 +154,8 @@ key only for the same logical initialization.
 Use the guarded convenience commands during onboarding:
 
 ```bash
-go run ./cmd/brosettlement mpc status
-go run ./cmd/brosettlement mpc initialize \
+./scripts/go/bin/brosettlement mpc status
+./scripts/go/bin/brosettlement mpc initialize \
   --idempotency-key '<stable-key-for-this-initialization>' \
   --confirm
 ```
@@ -169,18 +184,17 @@ adds `req-<nonce>`. Pass an explicit stable key when preparing a request that ma
 Use the Go listener:
 
 ```bash
-cd scripts/go
 export BROSETTLEMENT_API_KEY_ID="<uuid>"
 export BROSETTLEMENT_API_PRIVATE_KEY_FILE="/secure/path/private.pem"
 
-go run ./cmd/brosettlement websocket listen \
+./scripts/go/bin/brosettlement websocket listen \
   --log-path ./brosettlement_ws_listener.log
 ```
 
 For a bounded smoke test:
 
 ```bash
-go run ./cmd/brosettlement websocket listen --stop-after 30s
+./scripts/go/bin/brosettlement websocket listen --stop-after 30s
 ```
 
 The listener uses the separate `WS_CONNECT` canonical string, reconnects after failures, and

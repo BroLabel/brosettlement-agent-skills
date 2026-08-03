@@ -24,6 +24,9 @@ func TestRunHelp(t *testing.T) {
 	if !strings.Contains(stdout.String(), "brosettlement mpc initialize --confirm") {
 		t.Fatalf("help does not describe guarded MPC initialization: %s", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "brosettlement update [--auto]") {
+		t.Fatalf("help does not describe CLI updates: %s", stdout.String())
+	}
 }
 
 func TestAPIMutationRequiresConfirmationBeforeCredentials(t *testing.T) {

@@ -16,7 +16,9 @@ signed BroSettlement REST request, current Swagger lookup, response interpretati
 status check.
 
 Use the companion skill's unified `brosettlement` Go CLI for execution. Do not reconstruct API
-signatures or send equivalent ad hoc HTTP requests when the CLI is available.
+signatures or send equivalent ad hoc HTTP requests when the CLI is available. Follow the API
+skill's CLI version gate at the start of each request; it may update only the compiled executable,
+never either installed skill.
 
 If the agent cannot activate a sibling skill by name, read
 `../brosettlement-api/SKILL.md` and follow its workflow directly. If the sibling folder is

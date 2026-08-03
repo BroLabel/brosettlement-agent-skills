@@ -68,19 +68,36 @@ The API skill includes one CLI for contract discovery, signed REST calls, MPC op
 WebSocket events:
 
 ```bash
-cd brosettlement-api/scripts/go
-go build -o brosettlement ./cmd/brosettlement
+cd brosettlement-api
+./scripts/build-cli.sh
 
-./brosettlement commands wallets --json
-./brosettlement api GET /api/v1/mpc/status
-./brosettlement mpc status
-./brosettlement websocket listen --stop-after 30s
+./scripts/go/bin/brosettlement update --auto
+./scripts/go/bin/brosettlement version
+./scripts/go/bin/brosettlement commands wallets --json
+./scripts/go/bin/brosettlement api GET /api/v1/mpc/status
+./scripts/go/bin/brosettlement mpc status
+./scripts/go/bin/brosettlement websocket listen --stop-after 30s
 ```
+
+Only the compiled CLI executable self-updates. Installed skills, references, and scripts remain
+unchanged. CLI releases use `cli-vMAJOR.MINOR.PATCH` tags and publish per-platform binaries plus
+`checksums.txt`; the updater verifies them before atomically replacing the current executable.
+
+Maintainers publish a CLI release by pushing an annotated semantic-version tag after the release
+commit is on `main`:
+
+```bash
+git tag -a cli-v1.0.0 -m "BroSettlement CLI 1.0.0"
+git push origin cli-v1.0.0
+```
+
+The release workflow tests the CLI, cross-compiles the supported platform binaries, generates
+their SHA-256 checksums, and creates the GitHub Release. Do not reuse or move a published CLI tag.
 
 State-changing REST methods require explicit confirmation:
 
 ```bash
-./brosettlement mpc initialize \
+./scripts/go/bin/brosettlement mpc initialize \
   --idempotency-key '<stable-key-for-this-initialization>' \
   --confirm
 ```
