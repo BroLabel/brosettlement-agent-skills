@@ -67,6 +67,29 @@ or force-remove a modified skill without an explicit user request.
 The API skill includes one CLI for contract discovery, signed REST calls, MPC operations, and
 WebSocket events:
 
+Use the portable command surface in an AI chat:
+
+```text
+# Full command list
+@brosettlement commands
+
+# Search by topic
+@brosettlement commands wallets
+@brosettlement commands "ledger balance" --json
+
+# Signed REST request
+@brosettlement api GET '/api/v1/wallets'
+
+# MPC status
+@brosettlement mpc status
+
+# WebSocket
+@brosettlement websocket listen --stop-after 30s
+```
+
+The agent resolves `@brosettlement` to the verified bundled executable. For direct shell use,
+build or invoke the native path:
+
 ```bash
 cd brosettlement-api
 ./scripts/build-cli.sh

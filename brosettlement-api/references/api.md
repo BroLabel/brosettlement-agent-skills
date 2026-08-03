@@ -164,9 +164,14 @@ Keep the private key file outside the skill and source repository.
    settings shown on the API-key page without displaying secrets or asking for the user's IP.
 4. Run an applicable read-only probe to validate the signature, timestamp, nonce, key status,
    and allowlist before the first mutation.
-5. Show a redacted mutation plan and obtain confirmation.
+5. Show a redacted mutation plan and obtain confirmation, unless a calling skill has already
+   captured explicit standing authorization for the exact operation. The onboarding tutorial may
+   use this only for one staging/testnet ledger account and one linked staging/testnet wallet;
+   keep the plan concise and never extend this exception to MPC initialization, withdrawal,
+   signing, production/mainnet activity, destructive actions, or additional resources.
 6. Send the mutation once with a stable idempotency key.
-7. Verify the resulting resource or lifecycle through REST and relevant WebSocket events.
+7. Verify the resulting resource or lifecycle through REST and relevant WebSocket events. Return
+   the sanitized API response and identifiers, and claim success only after read-back succeeds.
 8. If the outcome is uncertain, inspect status before retrying; do not switch payloads or
    idempotency keys blindly.
 

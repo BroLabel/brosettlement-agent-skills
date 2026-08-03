@@ -181,10 +181,31 @@ Require all of the following before wallet creation:
    scopes. Never show the private key or operate the Console.
 4. Wait until the user confirms the key is active and its matching credentials are available to
    `$brosettlement-api` through the approved runtime environment.
-5. Create a ledger account through `$brosettlement-api` and read it back by ID.
-6. Create a wallet linked to that account through `$brosettlement-api` and read it back by ID.
-7. Choose a ready testnet chain such as TRON Nile.
-8. Confirm the wallet becomes **Active**.
+5. Treat the user's request to complete onboarding as authorization for exactly one staging/testnet
+   ledger account and one linked staging/testnet wallet. Do not ask separate confirmations for
+   these two tutorial resources and do not show a verbose mutation plan unless requested. The CLI
+   may still receive its required `--confirm` flag under this standing authorization.
+6. Create the ledger account through `$brosettlement-api`, require its returned ID, and read it
+   back by ID. Only then state that creation succeeded, show the sanitized response and returned
+   fields, and explain that all accounts can be listed with:
+
+   ```text
+   @brosettlement api GET '/api/v1/ledger/accounts'
+   ```
+
+   The same resources are visible in Console under **Accounts**.
+7. Create a wallet linked to that account on a ready testnet chain such as TRON Nile, require its
+   returned ID, read it back, and poll until it becomes **Active**. State success explicitly and
+   show the sanitized response plus returned wallet ID, account ID, network, public address,
+   status, and timestamps when those fields are present. List wallets later with:
+
+   ```text
+   @brosettlement api GET '/api/v1/wallets'
+   @brosettlement api GET '/api/v1/ledger/accounts/<accountId>/wallets'
+   ```
+
+   Wallets are also visible in Console under **Wallets**. Never claim success when read-back or
+   lifecycle verification is incomplete; return the sanitized response and explain what remains.
 9. If the user wants to test a TRON Nile deposit, confirm the selected asset is returned by
    `GET /api/v1/assets`, then show the public deposit address and these resources:
    - [TRON Nile faucet](https://nileex.io/join/getJoinPage);

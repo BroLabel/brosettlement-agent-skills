@@ -45,16 +45,26 @@ generated examples, or shell history.
 3. Fetch the current Swagger JSON before answering endpoint, command, field, enum, scope, or error-schema questions.
 4. Identify the exact operation, request schema, response schema, required scope, authentication headers, body-hash requirement, and idempotency requirement.
 5. Resolve credentials through the credential protocol and verify prerequisites without printing secrets.
-6. Prepare a redacted request plan: environment, method, exact target, scope, body source, idempotency behavior, and expected success response.
+6. Prepare a redacted request plan: environment, method, exact target, scope, body source,
+   idempotency behavior, and expected success response. Keep it internal or summarize it in one
+   sentence when a calling skill defines an authorized tutorial flow; show the full plan when the
+   user requests it or before other mutations.
 7. Run a safe read-only authentication probe before the first mutation when an applicable read scope exists.
 8. Serialize the request body exactly once and hash the exact bytes that will be sent.
 9. Build the canonical string with the exact request target, including the raw query string.
-10. Ask for confirmation immediately before create, withdrawal, MPC initialization, signing, or another state-changing request.
+10. Ask for confirmation immediately before a state-changing request unless a calling skill has
+    already captured explicit, narrowly scoped standing authorization. In particular,
+    `$brosettlement-onboarding` may authorize exactly one staging/testnet ledger account and one
+    linked staging/testnet wallet as part of the requested tutorial. This exception never covers
+    MPC initialization, withdrawal, signing, production/mainnet activity, destructive actions, or
+    additional resources.
 11. Sign and send the confirmed request once with all required headers.
 12. Validate the HTTP status and parse errors using the documented error schema.
 13. Verify the resulting resource or lifecycle through a read endpoint and, when relevant, WebSocket events.
 14. For uncertain outcomes, read the resource or status before retrying. Reuse the same idempotency key only for the identical logical request.
-15. Report the operation, target environment, status, identifiers, and verification result without exposing secrets.
+15. Report the operation, target environment, status, sanitized API response, identifiers, and
+    verification result without exposing secrets. After a create, read the resource back and state
+    success explicitly only when verification succeeds.
 
 ## Canonical signing invariants
 
@@ -103,6 +113,35 @@ or source validation to make an update succeed.
 Keep `cmd/list-commands`, `cmd/api-request`, and `cmd/ws-listener` only as legacy-compatible entry
 points. Do not assemble signatures with ad hoc shell commands when the unified CLI is available.
 
+### Present commands to the user
+
+When teaching or returning a reusable command in chat, use the portable `@brosettlement` command
+surface instead of exposing the skill's internal executable path. Present commands in this form:
+
+```text
+# Full command list
+@brosettlement commands
+
+# Search by topic
+@brosettlement commands wallets
+@brosettlement commands "ledger balance" --json
+
+# Signed REST request
+@brosettlement api GET '/api/v1/wallets'
+
+# MPC status
+@brosettlement mpc status
+
+# WebSocket
+@brosettlement websocket listen --stop-after 30s
+```
+
+Treat `@brosettlement` as the user-facing invocation handled by the installed skill. When actually
+executing the operation, resolve it to the bundled verified CLI at
+`./scripts/go/bin/brosettlement` (or the equivalent absolute installed path). Show the native path
+only for direct-shell troubleshooting, builds, updates, or when the user's agent does not support
+the `@brosettlement` command surface.
+
 ## Answer API command questions
 
 Use the Go command lister whenever the user asks what is available or asks for an operation by
@@ -136,8 +175,10 @@ export BROSETTLEMENT_API_PRIVATE_KEY_FILE="/secure/path/private.pem"
 The client signs the exact target and body bytes, adds required empty-body hashes and idempotency
 keys for the operations currently documented by Swagger, sends the request, and prints a
 structured response. `GET`, `HEAD`, and `OPTIONS` run directly. Every other method requires
-`--confirm`, which must be supplied only after the active agent has shown the redacted plan and
-received explicit user confirmation.
+`--confirm`. Supply it only after explicit authorization: either immediate user confirmation or
+narrow standing authorization defined by the calling skill. The onboarding exception covers only
+one staging/testnet ledger account and one linked staging/testnet wallet; it does not remove the
+CLI safeguard or authorize any other mutation.
 
 For staging `POST /api/v1/mpc/initialize`, follow the verified server-compatible exception even
 though Swagger marks `X-Api-Body-Hash` as required:

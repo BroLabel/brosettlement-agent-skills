@@ -48,12 +48,21 @@ Treat API key creation, editing, rotation, and revocation as user-only Console a
 - Ask one blocking question at a time.
 - Do not present the entire questionnaire at once.
 - Keep a private progress checklist in the conversation and resume from the first incomplete checkpoint.
-- After each completed checkpoint, briefly state what was verified and ask the next required question.
+- After each completed checkpoint, briefly state what was verified. Ask a question only when the
+  user's input or authorization is actually required; otherwise continue automatically.
 - Use the user's language for conversation, while preserving Console labels, commands, environment variables, and status values exactly.
-- Perform safe read-only checks when tools are available. Ask before package installation,
-  local credential generation, process startup, MPC initialization, or wallet creation when the
-  active agent requires confirmation. API key management remains user-only and is never an agent
-  action.
+- Perform safe read-only checks when tools are available. Ask before package installation, local
+  credential generation, process startup, MPC initialization, production/mainnet activity, a
+  withdrawal, or another higher-risk mutation. API key management remains user-only and is never
+  an agent action.
+- Treat an explicit request to complete onboarding or create the first testnet wallet as standing
+  authorization for exactly one staging/testnet ledger account and one linked staging/testnet
+  wallet. Do not ask separate yes/no confirmation before either tutorial create. The standing
+  authorization ends after those two resources are created, or immediately if the environment,
+  payload purpose, or resource count changes.
+- Do not front-load a technical mutation plan for the two tutorial creates unless the user asks
+  for it. Use one short progress sentence, perform the operation, verify it, and teach from the
+  actual result.
 - Never claim that a step is complete without a direct result or the user's explicit confirmation.
 
 ## Required sequence
@@ -263,11 +272,43 @@ After MPC readiness:
 5. Pause until the user confirms the integration key is active, all three scopes are selected,
    and its matching credentials are available to `$brosettlement-api`. If the answer in step 1
    was **Yes**, obtain the same confirmation without generating another pair.
-6. Use `$brosettlement-api` to inspect and call `POST /api/v1/ledger/accounts`.
-7. Verify the ledger account with `GET /api/v1/ledger/accounts/{accountId}`.
-8. Use `$brosettlement-api` to inspect and call `POST /api/v1/wallets` for a ready testnet chain
-   such as **TRON Nile**.
-9. Confirm the wallet becomes **Active**.
+6. Briefly say that the first testnet ledger account is being created. Use `$brosettlement-api`
+   to inspect and call `POST /api/v1/ledger/accounts`. When the user did not choose tutorial
+   names, use a clear default such as `Testnet Treasury` and generate a unique `externalId`; do
+   not interrupt the flow merely to approve those harmless defaults. Pass the CLI's required
+   `--confirm` under the standing onboarding authorization above without asking the user again.
+7. Require an account ID from the create response and verify it with
+   `GET /api/v1/ledger/accounts/{accountId}`. Only after successful read-back, say explicitly
+   **Ledger account created successfully.** Show the sanitized create response and a compact
+   summary of the fields actually returned, such as `id`, `name`, `externalId`, organization ID,
+   and timestamps. Never invent missing fields. Then teach both ways to find it later:
+
+   ```text
+   @brosettlement api GET '/api/v1/ledger/accounts'
+   ```
+
+   The same accounts are available in BroSettlement Console under **Accounts**. Continue to the
+   wallet automatically; do not pause for another confirmation.
+8. Briefly say that a wallet is being created for the verified account. Use
+   `$brosettlement-api` to inspect and call `POST /api/v1/wallets` for a ready testnet chain such
+   as **TRON Nile**, using a stable idempotency key when the current contract requires one. Pass
+   `--confirm` under the same standing onboarding authorization without asking the user again.
+9. Require a wallet ID from the response, verify it with `GET /api/v1/wallets/{walletId}`, and
+   poll with reasonable backoff until it becomes **Active**. Then say explicitly **Wallet created
+   successfully.** Show the sanitized create response and a compact summary of the fields
+   actually returned, including the wallet ID, linked account ID, network/chain, public address,
+   status, and timestamps when present. Never display secrets or fabricate fields. Teach how to
+   retrieve it later:
+
+   ```text
+   @brosettlement api GET '/api/v1/wallets'
+   @brosettlement api GET '/api/v1/ledger/accounts/<accountId>/wallets'
+   ```
+
+   The user can also open **Wallets** in Console for the wallet list and **Accounts** for the
+   linked account details. If a create request is accepted but read-back or lifecycle verification
+   fails, report **verification incomplete**, show the sanitized API response and returned ID,
+   and do not claim successful creation.
 10. Ask: **Would you like to test a small TRON Nile deposit next?** If the answer is **Yes**:
     - use `$brosettlement-api` to confirm the wallet is **Active**, its network is exactly TRON
       Nile, and the proposed asset is currently returned by `GET /api/v1/assets`;
