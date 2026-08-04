@@ -55,8 +55,12 @@ Follow these checkpoints in order:
 11. MPC key, Co-Signer, and testnet chain readiness verified through the API skill.
 12. Separate integration API key prepared with least-privilege account and wallet scopes.
 13. First ledger account and testnet wallet created and read back through the API skill.
+14. Existing credential, configuration, encryption-key, and encrypted-shares paths reported with
+    their purposes and recovery requirements; no backup destination requested and no files copied.
 
 Pause at any incomplete checkpoint. Ask only for the information required to resolve that checkpoint.
+After checkpoint 14 and the completion report, stop. Do not offer or schedule recurring
+Co-Signer monitoring, periodic health checks, background alerts, reminders, or automations.
 
 After account access is confirmed, ask the user to copy the full URL from the browser address
 bar of the BroSettlement admin panel where they registered and can see their organization. Do
@@ -226,13 +230,24 @@ Require all of the following before wallet creation:
 
 ## Storage, backup, and recovery
 
-Back up together:
+At the end of onboarding, do not ask the user for another protected directory and do not copy,
+move, archive, or upload secrets. Read the resolved paths from the active configuration and report
+the exact absolute location, purpose, and recovery importance of each artifact that exists in a
+compact table:
 
-- the complete encrypted shares directory;
+- Co-Signer Ed25519 private/public PEM files;
+- integration Ed25519 private/public PEM files, when a separate integration key was created;
 - the matching share-encryption key;
-- the Ed25519 API private key or a tested rotation procedure.
+- the complete encrypted MPC shares directory;
+- runtime configuration or launcher files, with a warning when any contains secret material.
 
-Store encrypted shares and their encryption key in separate protected locations. Test restoration. Never edit share files or copy them between organizations.
+Explain which files are private and which public PEM files are non-secret. Recommend that the user
+personally preserve the artifacts in trusted encrypted or offline storage, without performing the
+copy. To move the same organization and Co-Signer to production infrastructure while retaining
+signing access to previously created wallets, restore the same complete encrypted MPC shares
+directory with its matching share-encryption key. Preserve API private keys when reusing their
+existing API Key IDs; API-key rotation is separate and does not recover MPC shares. Never edit
+share files, mix material between organizations, or initialize a replacement MPC key as a backup.
 
 ## Troubleshooting order
 

@@ -63,6 +63,9 @@ Treat API key creation, editing, rotation, and revocation as user-only Console a
 - Do not front-load a technical mutation plan for the two tutorial creates unless the user asks
   for it. Use one short progress sentence, perform the operation, verify it, and teach from the
   actual result.
+- Do not offer, schedule, or create recurring Co-Signer monitoring, periodic health checks,
+  background alerts, reminders, or automations as part of onboarding. After the completion report,
+  stop without asking whether the user wants ongoing monitoring.
 - Never claim that a step is complete without a direct result or the user's explicit confirmation.
 
 ## Required sequence
@@ -332,7 +335,40 @@ After MPC readiness:
     instructions for the current required scopes, wait for confirmation, and obtain explicit
     authorization for the state-changing request.
 12. Reconcile completed tests with REST, optional WebSocket events, and ledger records.
-13. Configure monitoring and encrypted-share backups before mainnet.
+13. Report the existing credential and MPC-share locations as described below. Do not ask the
+    user for a backup destination and do not copy, move, archive, upload, or display any secret.
+
+### Report secret locations and recovery requirements
+
+At the end of onboarding, inspect the resolved configuration and print the exact absolute path of
+every credential or recovery artifact that was created or selected. Group them by their actual
+locations; do not imply that all files are in one directory when the shares directory is elsewhere.
+Use a compact table with **Artifact**, **Absolute path**, **Purpose**, and **Recovery importance**.
+For each item, explain its purpose:
+
+- Co-Signer Ed25519 private PEM: signs Co-Signer API requests for its current API Key ID;
+- Co-Signer public PEM: registered in Console and safe to display, but not a secret;
+- share-encryption key: decrypts the locally stored encrypted MPC share;
+- complete encrypted MPC shares directory: contains the client-controlled MPC material used to
+  participate in signing for wallets created under this MPC key;
+- integration Ed25519 private PEM: signs ledger, wallet, and other integration API requests for
+  its current API Key ID;
+- integration public PEM: registered in Console and safe to display, but not a secret;
+- runtime configuration or launcher files: identify API Key IDs, endpoints, and the paths from
+  which the protected values are loaded; state whether they contain secrets before listing them.
+
+Omit artifacts that were not created or used. Never print file contents, secret values, key
+fingerprints that were not already approved for display, or environment-variable values. Tell the
+user to preserve these paths and make their own protected, encrypted backup in a trusted secret
+manager or offline storage. Do not ask where to save it and do not perform the copy.
+
+State clearly that moving the same BroSettlement organization and Co-Signer to production
+infrastructure without losing signing access to previously created wallets requires restoring the
+same complete encrypted MPC shares directory together with its matching share-encryption key.
+They are a matched recovery set; losing either can make the client-held MPC share unusable. Also
+preserve each API private key when the corresponding existing API Key ID will continue to be used;
+an API credential can instead be rotated through the supported Console process, but that does not
+replace or recover the MPC shares. Never initialize a replacement MPC key as a backup procedure.
 
 ## Operating rules
 
@@ -346,6 +382,9 @@ After MPC readiness:
 - Do not create a wallet before MPC is ready.
 - Do not change the API key, share-encryption key, or shares directory while DKG or signing is active.
 - Use testnet by default. Require explicit user authorization and verified production readiness before any mainnet operation.
+- Do not turn operational monitoring guidance into an onboarding checkpoint or follow-up question.
+- Do not ask for a backup directory or copy secrets during onboarding; report the existing absolute
+  paths and let the user choose and perform their own secure backup.
 - Stop and explain the blocker when credentials, scopes, allowlists, plan limits, or readiness checks are incomplete.
 
 ## Completion report
@@ -363,4 +402,5 @@ At the end, report each checkpoint without exposing secrets or claiming optional
 - chain readiness;
 - ledger account and wallet identifiers;
 - test transaction status;
-- monitoring and backup readiness.
+- exact paths and purposes of the credential files and encrypted shares, without showing values;
+- the matched shares-directory and share-encryption-key recovery requirement for existing wallets.
