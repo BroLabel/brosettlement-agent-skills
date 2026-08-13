@@ -53,7 +53,7 @@ function requiresBodyHash(requestMethod, requestTarget) {
   return path.startsWith("/api/v1/co-signer/sessions/") && path.endsWith("/messages");
 }
 
-function requiresExplicitEmptyFormBody(requestMethod, requestTarget) {
+function requiresExactEmptyJSONObject(requestMethod, requestTarget) {
   return requestMethod === "POST" &&
     requestTarget.split("?", 1)[0] === "/api/v1/mpc/initialize";
 }
@@ -74,12 +74,15 @@ function requiresIdempotency(requestMethod, requestTarget) {
   return path.startsWith("/api/v1/co-signer/sessions/") && path.endsWith("/messages");
 }
 
-const explicitEmptyFormBody = requiresExplicitEmptyFormBody(method, target);
-if (explicitEmptyFormBody && bodyFile) {
-  fail("/api/v1/mpc/initialize requires an explicit zero-length form body; omit --body-file");
+const exactEmptyJSONObject = requiresExactEmptyJSONObject(method, target);
+let body = bodyFile ? readFileSync(bodyFile) : Buffer.alloc(0);
+if (exactEmptyJSONObject) {
+  if (!bodyFile) body = Buffer.from("{}", "utf8");
+  if (!body.equals(Buffer.from("{}", "utf8"))) {
+    fail("/api/v1/mpc/initialize requires the exact two-byte JSON body {}");
+  }
 }
-const body = bodyFile ? readFileSync(bodyFile) : Buffer.alloc(0);
-const includeBodyHash = Boolean(bodyFile) || requiresBodyHash(method, target);
+const includeBodyHash = body.length > 0 || requiresBodyHash(method, target);
 const bodyHash = includeBodyHash ? createHash("sha256").update(body).digest("hex") : "";
 const canonical = [method, target, bodyHash, timestamp, nonce, keyId].join("\n");
 const privateKey = privateKeyFile ? readFileSync(privateKeyFile, "utf8") : privateKeyInline;
@@ -93,10 +96,10 @@ const headers = {
 };
 
 if (includeBodyHash) headers["X-Api-Body-Hash"] = bodyHash;
-if (explicitEmptyFormBody) {
-  headers["Content-Type"] = "application/x-www-form-urlencoded";
-}
+if (body.length > 0) headers["Content-Type"] = "application/json";
 if (explicitIdempotencyKey || requiresIdempotency(method, target)) {
   headers["X-Idempotency-Key"] = explicitIdempotencyKey ?? `req-${nonce}`;
 }
-process.stdout.write(`${JSON.stringify({ canonicalRequestTarget: target, headers }, null, 2)}\n`);
+const output = { canonicalRequestTarget: target, headers };
+if (exactEmptyJSONObject) output.body = "{}";
+process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);

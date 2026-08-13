@@ -167,7 +167,9 @@ Tell the user to perform these steps manually in BroSettlement Console:
    - **Read MPC**
    - **Raw MPC co-signer**
 7. Create the key.
-8. Store the **API Key ID** securely without exposing private key material.
+8. Return to the **API Keys** list, find the new `Testnet Co-Signer` key, and select **View**.
+9. On the key details page, locate **Key ID** and click the copy button beside it. Store the
+   copied **API Key ID** securely without exposing private key material.
 
 Do not open or operate the Console for this checkpoint. Do not ask permission to do so. Ask the
 user to reply when the key is created and the API Key ID, all three permissions, all required
@@ -251,7 +253,8 @@ initialization attempts blindly.
 After MPC readiness:
 
 1. Ask only whether the user already has a separate integration API key, with its matching private
-   key stored locally, that has exactly `wallets:create`, `wallets:read`, and `accounts:read`. Do
+   key stored locally, that has exactly `accounts:read`, `accounts:create`, `wallets:read`, and
+   `wallets:create`. Do
    not add these scopes to the long-running Co-Signer key by default.
 2. If the answer is **No**, ask only:
 
@@ -269,10 +272,17 @@ After MPC readiness:
    use a recognizable name such as `Testnet Integration`. For temporary staging/testnet use,
    explain that `0.0.0.0/0` in **IP whitelist (CIDR)** accepts any IPv4 source and bypasses the IP
    restriction; never allow it for production, where the user must enter the correct narrow public
-   egress IP or CIDR. Select exactly `wallets:create`, `wallets:read`, and `accounts:read`, create
-   and activate the key, and place its API Key ID in the approved runtime environment. Never show
-   the integration private key or operate the Console.
-5. Pause until the user confirms the integration key is active, all three scopes are selected,
+   egress IP or CIDR. Select exactly these four Console permissions:
+   - **Read ledger accounts** (`accounts:read`)
+   - **Create ledger accounts** (`accounts:create`)
+   - **Read wallets & assets** (`wallets:read`)
+   - **Create wallets** (`wallets:create`)
+
+   Create and activate the key. Return to the **API Keys** list, find `Testnet Integration`, select
+   **View**, and click the copy button beside **Key ID** on the key details page. Place that copied
+   API Key ID in the approved runtime environment. Never show the integration private key or
+   operate the Console.
+5. Pause until the user confirms the integration key is active, all four scopes are selected,
    and its matching credentials are available to `$brosettlement-api`. If the answer in step 1
    was **Yes**, obtain the same confirmation without generating another pair.
 6. Briefly say that the first testnet ledger account is being created. Use `$brosettlement-api`

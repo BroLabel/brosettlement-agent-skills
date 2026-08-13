@@ -81,7 +81,7 @@ For REST, use exactly six newline-separated fields:
 If the bundled Go client cannot be used, implement these same invariants in the user's language
 and verify a fixed timestamp/nonce test vector locally before any live mutation. Do not copy a
 signing algorithm from another skill or document unless it matches the current staging Swagger
-and the compatibility exceptions in this skill.
+and the current operation-specific requirements in this skill.
 
 ## Use the bundled CLI
 
@@ -180,17 +180,16 @@ narrow standing authorization defined by the calling skill. The onboarding excep
 one staging/testnet ledger account and one linked staging/testnet wallet; it does not remove the
 CLI safeguard or authorize any other mutation.
 
-For staging `POST /api/v1/mpc/initialize`, follow the verified server-compatible exception even
-though Swagger marks `X-Api-Body-Hash` as required:
+For staging `POST /api/v1/mpc/initialize`, follow the current operation contract exactly:
 
-- send an explicit zero-length body with `Content-Type: application/x-www-form-urlencoded`;
-- keep the canonical `BODY_HASH` line empty;
-- omit `X-Api-Body-Hash`;
-- never send `{}` or a body file.
+- send the exact two-byte JSON body `{}` with `Content-Type: application/json`;
+- set `X-Api-Body-Hash` and the canonical `BODY_HASH` line to
+  `44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a`;
+- never send a zero-length body or reformat the payload.
 
-This exact form returned HTTP `201` in staging. Do not retry alternative body/hash combinations
-after an uncertain outcome; check `GET /api/v1/mpc/status` first and reuse the same idempotency
-key only for the same logical initialization.
+The guarded `mpc initialize` command supplies `{}` automatically. Do not retry alternative
+body/hash combinations after an uncertain outcome; check `GET /api/v1/mpc/status` first and
+reuse the same idempotency key only for the same logical initialization.
 
 Use the guarded convenience commands during onboarding:
 

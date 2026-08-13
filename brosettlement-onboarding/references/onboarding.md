@@ -24,8 +24,8 @@ Required API checkpoints:
 | Before initialization | `brosettlement mpc status` | Current key and chain state recorded |
 | Initialize MPC | `brosettlement mpc initialize --idempotency-key <stable-key> --confirm` | Accepted idempotent initialization request after explicit confirmation |
 | DKG monitoring | `brosettlement mpc status` | MPC key and required testnet chains reach ready states |
-| Ledger account | Separate integration key: `POST /api/v1/ledger/accounts`, then `GET /api/v1/ledger/accounts/{accountId}` | Key has `wallets:create` and `accounts:read`; created resource is readable |
-| Wallet | Separate integration key: `POST /api/v1/wallets`, then `GET /api/v1/wallets/{walletId}` | Key also has `wallets:read`; wallet reaches `ACTIVE` |
+| Ledger account | Separate integration key: `POST /api/v1/ledger/accounts`, then `GET /api/v1/ledger/accounts/{accountId}` | Key has `accounts:create` and `accounts:read`; created resource is readable |
+| Wallet | Separate integration key: `POST /api/v1/wallets`, then `GET /api/v1/wallets/{walletId}` | Key also has `wallets:create` and `wallets:read`; wallet reaches `ACTIVE` |
 
 Fetch the current staging Swagger before each state-changing operation. Treat exact fields,
 scopes, enums, and errors from Swagger as authoritative.
@@ -106,7 +106,9 @@ Give the user these manual BroSettlement Console instructions:
    - **Initialize MPC**
    - **Read MPC**
    - **Raw MPC co-signer**
-5. Store the resulting API Key ID securely.
+5. Create the key, return to the **API Keys** list, and select **View** for the new key.
+6. On the key details page, locate **Key ID**, click the copy button beside it, and store the
+   copied API Key ID securely.
 
 Stop and wait for the user to confirm completion. Do not open the authenticated Console, upload
 the public key, select permissions, submit the form, or retrieve the API Key ID for the user.
@@ -175,14 +177,17 @@ Require all of the following before wallet creation:
 ## 6. Create and test the first wallet
 
 1. Ask whether the user already has a separate integration API key and matching local private key
-   with exactly `wallets:create`, `wallets:read`, and `accounts:read`. Keep the long-running
+   with exactly `accounts:read`, `accounts:create`, `wallets:read`, and `wallets:create`. Keep the long-running
    Co-Signer key limited to its three MPC scopes.
 2. If the answer is **No**, ask permission to generate a new, separate Ed25519 pair in a resolved
    protected directory. Generate it only after confirmation, use distinct integration filenames,
    and never reuse or overwrite the Co-Signer pair.
 3. Show the complete integration public key in a fenced `pem` block. Tell the user to copy it into
-   **Public key (PEM)** and manually create an integration API key with exactly the three required
-   scopes. Never show the private key or operate the Console.
+   **Public key (PEM)** and manually create an integration API key with exactly **Read ledger
+   accounts** (`accounts:read`), **Create ledger accounts** (`accounts:create`), **Read wallets &
+   assets** (`wallets:read`), and **Create wallets** (`wallets:create`). Never show the private key
+   or operate the Console. After creation, tell the user to return to **API Keys**, select **View**
+   for the new integration key, and click the copy button beside **Key ID** on its details page.
 4. Wait until the user confirms the key is active and its matching credentials are available to
    `$brosettlement-api` through the approved runtime environment.
 5. Treat the user's request to complete onboarding as authorization for exactly one staging/testnet

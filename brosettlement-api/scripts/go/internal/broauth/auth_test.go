@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestRESTHeadersSignsMPCInitializeWithoutBodyHash(t *testing.T) {
+func TestRESTHeadersSignsMPCInitializeEmptyJSONObject(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
@@ -33,19 +33,20 @@ func TestRESTHeadersSignsMPCInitializeWithoutBodyHash(t *testing.T) {
 	t.Setenv(apiKeyIDEnv, keyID)
 	t.Setenv(privateKeyFileEnv, keyPath)
 
-	headers, _, err := RESTHeaders("POST", "/api/v1/mpc/initialize", nil)
+	headers, _, err := RESTHeaders("POST", "/api/v1/mpc/initialize", []byte("{}"))
 	if err != nil {
 		t.Fatalf("RESTHeaders: %v", err)
 	}
 
-	if got := headers.Get("X-Api-Body-Hash"); got != "" {
+	const expectedBodyHash = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+	if got := headers.Get("X-Api-Body-Hash"); got != expectedBodyHash {
 		t.Fatalf("unexpected X-Api-Body-Hash: %q", got)
 	}
 
 	canonical := strings.Join([]string{
 		"POST",
 		"/api/v1/mpc/initialize",
-		"",
+		expectedBodyHash,
 		headers.Get("X-Api-Timestamp"),
 		headers.Get("X-Api-Nonce"),
 		keyID,
@@ -55,10 +56,10 @@ func TestRESTHeadersSignsMPCInitializeWithoutBodyHash(t *testing.T) {
 		t.Fatalf("decode signature: %v", err)
 	}
 	if !ed25519.Verify(publicKey, []byte(canonical), signature) {
-		t.Fatal("signature does not preserve the empty canonical body-hash line")
+		t.Fatal("signature does not contain the hash of the exact {} body")
 	}
-	if !RequiresExplicitEmptyFormBody("POST", "/api/v1/mpc/initialize") {
-		t.Fatal("MPC initialize must use an explicit zero-length form body")
+	if !RequiresExactEmptyJSONObject("POST", "/api/v1/mpc/initialize") {
+		t.Fatal("MPC initialize must use the exact empty JSON object")
 	}
 }
 

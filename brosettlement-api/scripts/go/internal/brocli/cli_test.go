@@ -44,7 +44,7 @@ func TestAPIMutationRequiresConfirmationBeforeCredentials(t *testing.T) {
 	}
 }
 
-func TestMPCInitializeUsesVerifiedStagingRequestShape(t *testing.T) {
+func TestMPCInitializeUsesCurrentStagingRequestShape(t *testing.T) {
 	configureTestCredentials(t)
 	var requestErr string
 	useRoundTripper(t, func(request *http.Request) (*http.Response, error) {
@@ -58,9 +58,9 @@ func TestMPCInitializeUsesVerifiedStagingRequestShape(t *testing.T) {
 		}{
 			{request.Method == http.MethodPost, "method is not POST"},
 			{request.URL.RequestURI() == "/api/v1/mpc/initialize", "target changed"},
-			{len(body) == 0, "body is not empty"},
-			{request.Header.Get("Content-Type") == "application/x-www-form-urlencoded", "content type is not form"},
-			{request.Header.Get("X-Api-Body-Hash") == "", "body hash header must be omitted"},
+			{string(body) == "{}", "body is not the exact empty JSON object"},
+			{request.Header.Get("Content-Type") == "application/json", "content type is not JSON"},
+			{request.Header.Get("X-Api-Body-Hash") == "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", "body hash does not match exact {} bytes"},
 			{request.Header.Get("X-Idempotency-Key") == "init-test", "idempotency key changed"},
 		}
 		for _, check := range checks {

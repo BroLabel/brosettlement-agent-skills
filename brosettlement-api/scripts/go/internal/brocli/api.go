@@ -125,9 +125,13 @@ func executeAPI(options apiOptions, stdout io.Writer) error {
 			return fmt.Errorf("read body file: %w", err)
 		}
 	}
-	explicitEmptyFormBody := broauth.RequiresExplicitEmptyFormBody(options.method, options.target)
-	if explicitEmptyFormBody && options.bodyFile != "" {
-		return fmt.Errorf("%s requires an explicit zero-length form body; omit --body-file", options.target)
+	exactEmptyJSONObject := broauth.RequiresExactEmptyJSONObject(options.method, options.target)
+	if exactEmptyJSONObject {
+		if options.bodyFile == "" {
+			body = []byte("{}")
+		} else if !bytes.Equal(body, []byte("{}")) {
+			return fmt.Errorf("%s requires the exact two-byte JSON body {}", options.target)
+		}
 	}
 
 	headers, nonce, err := broauth.RESTHeaders(options.method, options.target, body)
@@ -136,8 +140,6 @@ func executeAPI(options apiOptions, stdout io.Writer) error {
 	}
 	if len(body) > 0 {
 		headers.Set("Content-Type", "application/json")
-	} else if explicitEmptyFormBody {
-		headers.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	if options.idempotencyKey != "" {
 		headers.Set("X-Idempotency-Key", options.idempotencyKey)

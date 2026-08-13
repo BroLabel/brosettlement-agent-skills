@@ -162,7 +162,8 @@ func RequiresBodyHash(method, requestTarget string) bool {
 		return false
 	}
 	path := requestPath(requestTarget)
-	if path == "/api/v1/wallets" ||
+	if path == "/api/v1/mpc/initialize" ||
+		path == "/api/v1/wallets" ||
 		path == "/api/v1/ledger/accounts" ||
 		path == "/api/v1/transactions" {
 		return true
@@ -175,7 +176,7 @@ func RequiresBodyHash(method, requestTarget string) bool {
 		strings.HasSuffix(path, "/messages")
 }
 
-func RequiresExplicitEmptyFormBody(method, requestTarget string) bool {
+func RequiresExactEmptyJSONObject(method, requestTarget string) bool {
 	return strings.ToUpper(method) == http.MethodPost &&
 		requestPath(requestTarget) == "/api/v1/mpc/initialize"
 }

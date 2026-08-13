@@ -42,9 +42,13 @@ func main() {
 			fail("read body file: %v", err)
 		}
 	}
-	explicitEmptyFormBody := broauth.RequiresExplicitEmptyFormBody(*method, *target)
-	if explicitEmptyFormBody && *bodyFile != "" {
-		fail("%s requires an explicit zero-length form body; omit -body-file", *target)
+	exactEmptyJSONObject := broauth.RequiresExactEmptyJSONObject(*method, *target)
+	if exactEmptyJSONObject {
+		if *bodyFile == "" {
+			body = []byte("{}")
+		} else if !bytes.Equal(body, []byte("{}")) {
+			fail("%s requires the exact two-byte JSON body {}", *target)
+		}
 	}
 
 	headers, nonce, err := broauth.RESTHeaders(*method, *target, body)
@@ -53,8 +57,6 @@ func main() {
 	}
 	if len(body) > 0 {
 		headers.Set("Content-Type", "application/json")
-	} else if explicitEmptyFormBody {
-		headers.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	if *idempotencyKey != "" {
 		headers.Set("X-Idempotency-Key", *idempotencyKey)

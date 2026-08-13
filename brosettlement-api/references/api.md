@@ -8,7 +8,7 @@
 - API version: `1.0`
 - Staging base URL: `https://brosettlement-staging-api.brolabel.io`
 - REST prefix: `/api/v1`
-- Snapshot verified: 2026-07-30
+- Snapshot verified: 2026-08-13
 
 Both links are staging. The production URL is intentionally not defined yet and must be updated by
 the skill owner when it becomes available. Fetch the OpenAPI document whenever current fields,
@@ -41,10 +41,10 @@ API_KEY_ID
 Use uppercase method and preserve the exact raw path and query. For requests without body bytes,
 keep the third canonical line empty and omit `X-Api-Body-Hash`.
 
-Staging compatibility exception for `POST /api/v1/mpc/initialize`: Swagger marks
-`X-Api-Body-Hash` required, but the verified server-compatible request uses an explicit
-zero-length `application/x-www-form-urlencoded` body, an empty canonical `BODY_HASH` line, and no
-`X-Api-Body-Hash` header. Do not send `{}` or a body file.
+For `POST /api/v1/mpc/initialize`, send the exact two-byte JSON body `{}`. Set
+`Content-Type: application/json`, `X-Api-Body-Hash`, and the canonical `BODY_HASH` line to
+`44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a`. A zero-length body is not
+valid for this operation.
 
 ## Idempotency
 
@@ -180,7 +180,7 @@ Keep the private key file outside the skill and source repository.
 | Symptom | Check first |
 |---|---|
 | Signature rejected | Six canonical lines, exact raw query, API Key ID final line, timestamp skew, nonce grammar, padded Base64, and matching key pair. |
-| Body hash mismatch | Exact serialized bytes and `Content-Type`; for MPC initialization use the documented staging compatibility exception. |
+| Body hash mismatch | Exact serialized bytes and `Content-Type`; for MPC initialization require the exact `{}` bytes and their documented hash. |
 | Forbidden request | Required operation scope, active key status, and network/access settings shown on the API-key page. |
 | Validation or idempotency error | Current operation schema, required headers, stable logical-request key, and whether the key was reused with different bytes. |
 | Timeout or unknown mutation result | Read the resource or status before retrying with the same idempotency key. |
