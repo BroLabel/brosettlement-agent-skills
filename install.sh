@@ -92,7 +92,7 @@ if [ "$target" = "/" ]; then
 fi
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-skills="brosettlement-onboarding brosettlement-api"
+skills="brosettlement-onboarding brosettlement-api brosettlement-disaster-recovery"
 
 mkdir -p "$target"
 target=$(CDPATH= cd -- "$target" && pwd)

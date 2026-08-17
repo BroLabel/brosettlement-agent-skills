@@ -55,7 +55,7 @@ while [ "$#" -gt 0 ]; do
         exit 2
       fi
       case "$2" in
-        brosettlement-onboarding|brosettlement-api) skills=$2 ;;
+        brosettlement-onboarding|brosettlement-api|brosettlement-disaster-recovery) skills=$2 ;;
         *)
           printf '%s\n' "Unknown skill: $2" >&2
           exit 2
@@ -64,7 +64,7 @@ while [ "$#" -gt 0 ]; do
       shift 2
       ;;
     --all)
-      skills="brosettlement-onboarding brosettlement-api"
+      skills="brosettlement-onboarding brosettlement-api brosettlement-disaster-recovery"
       shift
       ;;
     --confirm)

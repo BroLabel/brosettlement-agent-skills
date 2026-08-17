@@ -3,7 +3,8 @@
 [![CI](https://github.com/BroLabel/brosettlement-agent-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/BroLabel/brosettlement-agent-skills/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-AI agent skills and a signed Go CLI for BroSettlement onboarding, API integration, and WebSocket events.
+AI agent skills and Go tooling for BroSettlement onboarding, API integration, WebSocket events,
+and client-controlled disaster recovery.
 
 > [!IMPORTANT]
 > The bundled API configuration targets the BroSettlement **staging environment**. A production
@@ -15,22 +16,25 @@ AI agent skills and a signed Go CLI for BroSettlement onboarding, API integratio
 |---|---|
 | [`brosettlement-onboarding`](brosettlement-onboarding/) | Guides a user from account access through manual API-key creation, Co-Signer installation, MPC initialization, readiness checks, and the first testnet wallet. |
 | [`brosettlement-api`](brosettlement-api/) | Discovers the current Swagger contract, sends Ed25519-signed REST requests, lists API operations, and listens to WebSocket events. |
+| [`brosettlement-disaster-recovery`](brosettlement-disaster-recovery/) | Runs a controlled Share B + Share C ceremony to create, threshold-sign, save, and broadcast one native TRX recovery transfer without BroSettlement participation. |
 
 The onboarding skill uses the API skill for every signed request and remote status check. API-key
-creation remains a manual user action in BroSettlement Console.
+creation remains a manual user action in BroSettlement Console. The disaster-recovery skill is an
+independent break-glass workflow and does not call BroSettlement APIs.
 
 ## Install with an AI agent
 
 Copy this prompt into an AI coding agent that supports skills:
 
 ```text
-Install both BroSettlement Agent Skills from
+Install all three BroSettlement Agent Skills from
 https://github.com/BroLabel/brosettlement-agent-skills.
 
-First inspect both SKILL.md files and the bundled scripts. Ask me which agent skills directory
-to use, then install brosettlement-onboarding and brosettlement-api as sibling folders without
-overwriting existing skills. Validate both skills after installation. Never ask me to paste a
-private key, password, JWT, TOTP code, or API secret into chat.
+First inspect all three SKILL.md files and the bundled scripts. Ask me which agent skills directory
+to use, then install brosettlement-onboarding, brosettlement-api, and
+brosettlement-disaster-recovery as sibling folders without overwriting existing skills. Validate
+all three skills after installation. Never ask me to paste a private key, MPC share, password, JWT,
+TOTP code, or API secret into chat.
 ```
 
 ## Manual installation
@@ -50,17 +54,18 @@ created by this script can be upgraded only when their tracked files are unchang
 ./install.sh --target /absolute/path/to/agent-skills --update
 ```
 
-Preview removal of both skills, then repeat with explicit confirmation:
+Preview removal of all three skills, then repeat with explicit confirmation:
 
 ```bash
 ./uninstall.sh --target /absolute/path/to/agent-skills --all
 ./uninstall.sh --target /absolute/path/to/agent-skills --all --confirm
 ```
 
-Use `--skill brosettlement-onboarding` or `--skill brosettlement-api` to remove one skill. The
-uninstaller recognizes only installations created by `install.sh` and refuses to remove modified
-files unless both `--force-modified` and `--confirm` are supplied. AI agents must never uninstall
-or force-remove a modified skill without an explicit user request.
+Use `--skill brosettlement-onboarding`, `--skill brosettlement-api`, or
+`--skill brosettlement-disaster-recovery` to remove one skill. The uninstaller recognizes only
+installations created by `install.sh` and refuses to remove modified files unless both
+`--force-modified` and `--confirm` are supplied. AI agents must never uninstall or force-remove a
+modified skill without an explicit user request.
 
 ## Unified Go CLI
 
@@ -134,6 +139,18 @@ export BROSETTLEMENT_API_PRIVATE_KEY_FILE='/absolute/secure/path/private.pem'
 
 Never commit the private key or paste its contents into chat, source files, command arguments, or
 logs.
+
+## Disaster recovery CLI
+
+The disaster-recovery skill includes a separate source-only Go CLI. It supports one native TRX
+transfer on TRON Nile or TRON mainnet using the client-controlled Share B + Share C quorum. It does
+not use BroSettlement APIs, support TRC-20, or provide a sign-only mode.
+
+Run it only through the controlled workflow in
+[`brosettlement-disaster-recovery/SKILL.md`](brosettlement-disaster-recovery/SKILL.md). The skill
+requires an explicit confirmation for the exact network, source, destination, and amount before
+the CLI temporarily combines B+C, signs, saves a mode-`600` transaction JSON, and broadcasts it.
+Outside the recovery ceremony, B and C must remain in separate trust and administrative domains.
 
 ## Development
 

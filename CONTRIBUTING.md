@@ -25,6 +25,10 @@ make check
 For changes to the API skill, also forward-test at least one read-only command and one guarded
 mutation plan. Do not execute a live mutation as part of a pull request test.
 
+For changes to the disaster-recovery skill, compile and test the source-only CLI with synthetic or
+fixture material only. Never combine real Share B + Share C artifacts, sign a real transaction, or
+broadcast to Nile or mainnet as part of repository validation.
+
 ## Pull requests
 
 Describe:

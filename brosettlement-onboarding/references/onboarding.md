@@ -6,6 +6,7 @@ Use the current public documentation when network access is available:
 - Co-Signer: https://www.brolabel.io/en/api-reference/co-signer
 - API reference: https://www.brolabel.io/en/api-reference/api-overview
 - Companion skill: `../brosettlement-api/SKILL.md`
+- Disaster-recovery skill: `../brosettlement-disaster-recovery/SKILL.md`
 - Source repository: https://github.com/BroLabel/brosettlement-mpc-co-signer
 
 ## API execution rule
@@ -279,12 +280,12 @@ Complete this checkpoint before creating an integration key, ledger account, or 
    `brosettlement mpc status`, and normal Share B signing readiness. Share C being absent from the
    active host after this checkpoint is expected and must not be treated as loss of normal signing
    readiness.
-7. Explain disaster recovery accurately: Share B plus Share C are cryptographically capable of
-   forming the client-controlled 2-of-3 quorum and signing without platform Share A or
-   BroSettlement participation. Co-Signer v1 does not currently ship a supported recovery CLI,
-   SDK, endpoint, or distributed recovery binary, so this capability requires a separately
-   audited recovery implementation and runbook. Do not describe the backup as a turnkey recovery
-   product or claim that recovery is operational until that tooling has been tested.
+7. Explain disaster recovery accurately: Share B plus Share C form the client-controlled 2-of-3
+   quorum and can sign without platform Share A or BroSettlement participation. For one native TRX
+   transfer on TRON Nile or mainnet, use only the sibling `$brosettlement-disaster-recovery` skill
+   and its controlled ceremony. That source-only CLI creates, signs, saves, and broadcasts; it does
+   not support TRC-20, other chains, or sign-only recovery. Do not generalize this narrow workflow
+   into a turnkey recovery product for every wallet or asset.
 
 If a later DKG creates a new Share C, repeat this checkpoint for the new `keyId`. Do not proceed to
 wallet creation while B and C remain together on the active Co-Signer host.

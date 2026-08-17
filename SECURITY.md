@@ -15,5 +15,9 @@ private security reporting channel.
 Include only the minimum information required to reproduce the issue. Never send real API keys,
 private keys, passwords, JWTs, TOTP codes, signed WebSocket URLs, MPC shares, or customer data.
 
+Share B and Share C together form a client-controlled signing quorum. Never attach either artifact
+to a public or private issue, and never bring both into the same support, CI, or development
+environment. Use synthetic fixtures for recovery-tool reports and tests.
+
 We will acknowledge the report, assess its impact, coordinate a fix, and publish remediation
 details when it is safe to do so.

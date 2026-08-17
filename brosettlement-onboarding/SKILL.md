@@ -282,12 +282,12 @@ artifact, restart, and verify that Share B signing remains ready. Do not copy or
 yourself. Never leave both B and C on the active host, and never remove the local copy until the
 independent backup has been verified.
 
-Explain that B+C form a client-controlled 2-of-3 recovery quorum that is cryptographically capable
-of signing without platform Share A or BroSettlement participation. Also state that Co-Signer v1
-does not ship a supported recovery CLI, SDK, endpoint, or distributed recovery binary; never claim
-that disaster-recovery signing is operational until the client has an audited recovery tool and
-runbook. Never store B and C in one host, filesystem, vault, cloud account, backup set, or shared
-administrative domain, and never give either share to a third party.
+Explain that B+C form a client-controlled 2-of-3 recovery quorum that can sign without platform
+Share A or BroSettlement participation. For a native TRX recovery transfer on TRON Nile or mainnet,
+hand off only to the sibling `$brosettlement-disaster-recovery` skill and its controlled ceremony.
+Do not claim support for TRC-20, other chains, or sign-only recovery. Never store B and C in one
+host, filesystem, vault, cloud account, backup set, or shared administrative domain outside the
+short recovery execution window, and never give either share to a third party.
 
 ### 9. Complete the Quickstart
 
@@ -440,8 +440,8 @@ initialize a replacement MPC key as a backup procedure.
   only Share B available for normal signing.
 - Never store, back up, transmit, or administer Share B and Share C together. Do not grant a third
   party access to either share or upload either artifact to chat, email, tickets, or shared drives.
-- Describe B+C as a cryptographic recovery quorum, not as a currently supported recovery product;
-  v1 requires separate audited recovery tooling before it can sign without BroSettlement.
+- Use `$brosettlement-disaster-recovery` only for its supported native TRX Nile/mainnet recovery
+  ceremony. Do not generalize that narrow tool into recovery support for other assets or chains.
 - During MPC readiness anomalies, compare the running Co-Signer with the official GitHub
   repository before proposing a reset or reinitialization. Never call an untagged commit a release.
 - Do not update the Co-Signer without explicit approval. Preserve the existing API credentials,

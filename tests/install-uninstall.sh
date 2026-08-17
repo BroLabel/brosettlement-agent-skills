@@ -10,6 +10,7 @@ target="$test_root/skills"
 "$repo/install.sh" --target "$target"
 test -f "$target/brosettlement-onboarding/.brosettlement-installed"
 test -f "$target/brosettlement-api/.brosettlement-manifest"
+test -f "$target/brosettlement-disaster-recovery/.brosettlement-manifest"
 
 # A generated or self-updated CLI binary is runtime state, not a skill modification.
 mkdir -p "$target/brosettlement-api/scripts/go/bin"
@@ -19,6 +20,7 @@ printf '%s\n' "test binary" > "$target/brosettlement-api/scripts/go/bin/brosettl
 "$repo/uninstall.sh" --target "$target" --all
 test -d "$target/brosettlement-onboarding"
 test -d "$target/brosettlement-api"
+test -d "$target/brosettlement-disaster-recovery"
 
 printf '%s\n' "local change" >> "$target/brosettlement-api/SKILL.md"
 if "$repo/install.sh" --target "$target" --update 2>/dev/null; then
@@ -31,10 +33,12 @@ if "$repo/uninstall.sh" --target "$target" --all --confirm 2>/dev/null; then
 fi
 test -d "$target/brosettlement-onboarding"
 test -d "$target/brosettlement-api"
+test -d "$target/brosettlement-disaster-recovery"
 
 "$repo/uninstall.sh" --target "$target" --all --force-modified --confirm
 test ! -e "$target/brosettlement-onboarding"
 test ! -e "$target/brosettlement-api"
+test ! -e "$target/brosettlement-disaster-recovery"
 
 "$repo/install.sh" --target "$target"
 mkdir -p "$target/brosettlement-api/scripts/go/bin"
@@ -44,5 +48,8 @@ test ! -e "$target/brosettlement-onboarding"
 test -d "$target/brosettlement-api"
 "$repo/uninstall.sh" --target "$target" --skill brosettlement-api --confirm
 test ! -e "$target/brosettlement-api"
+test -d "$target/brosettlement-disaster-recovery"
+"$repo/uninstall.sh" --target "$target" --skill brosettlement-disaster-recovery --confirm
+test ! -e "$target/brosettlement-disaster-recovery"
 
 printf '%s\n' "Install/update/uninstall lifecycle tests passed"
