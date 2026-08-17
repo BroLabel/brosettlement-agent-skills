@@ -49,17 +49,20 @@ Follow these checkpoints in order:
    public PEM shown to the user for copying into Console.
 6. Dedicated API key created with the three required MPC permissions.
 7. Official Co-Signer source installed, tested, and built.
-8. Persistent shares storage and separate encryption key protected.
+8. Separate primary Share B and recovery Share C storage plus the shared encryption key and stable
+   key ID protected.
 9. Co-Signer local health ready, raw Co-Signer API accessible, and Console status Online.
 10. MPC initialization explicitly started through the API skill and DKG completed.
 11. MPC key, Co-Signer, and testnet chain readiness verified through the API skill.
-12. Separate integration API key prepared with least-privilege account and wallet scopes.
-13. First ledger account and testnet wallet created and read back through the API skill.
-14. Existing credential, configuration, encryption-key, and encrypted-shares paths reported with
+12. Share C backup verified in independent client custody, Share C removed from the active
+    Co-Signer, and normal Share B readiness reverified.
+13. Separate integration API key prepared with least-privilege account and wallet scopes.
+14. First ledger account and testnet wallet created and read back through the API skill.
+15. Existing credential, configuration, encryption-key, and encrypted-shares paths reported with
     their purposes and recovery requirements; no backup destination requested and no files copied.
 
 Pause at any incomplete checkpoint. Ask only for the information required to resolve that checkpoint.
-After checkpoint 14 and the completion report, stop. Do not offer or schedule recurring
+After checkpoint 15 and the completion report, stop. Do not offer or schedule recurring
 Co-Signer monitoring, periodic health checks, background alerts, reminders, or automations.
 
 After account access is confirmed, ask the user to copy the full URL from the browser address
@@ -122,8 +125,8 @@ go mod download
 go test ./...
 go build -o ./bin/co-signer ./cmd/co-signer
 
-mkdir -p ./data/shares
-chmod 700 ./data/shares
+mkdir -p ./data/shares-primary ./data/shares-recovery
+chmod 700 ./data/shares-primary ./data/shares-recovery
 openssl rand -base64 32 > share-encryption.key
 chmod 600 share-encryption.key
 ```
@@ -136,15 +139,20 @@ Required runtime variables:
 | `CO_SIGNER_API_KEY_ID` | Dedicated Co-Signer API key UUID. |
 | `CO_SIGNER_API_PRIVATE_KEY` | Client-held Ed25519 private key. |
 | `CO_SIGNER_SHARE_ENCRYPTION_KEY` | Separate secret used to encrypt MPC shares. |
+| `CO_SIGNER_SHARE_ENCRYPTION_KEY_ID` | Stable, printable-ASCII, non-secret identifier (1–255 bytes) that binds the encryption key to both share artifacts. |
 
 Recommended explicit variables:
 
 | Variable | Recommended value |
 |---|---|
-| `CO_SIGNER_SHARES_DIR` | A protected persistent directory such as `./data/shares`. |
+| `CO_SIGNER_PRIMARY_SHARES_DIR` | Protected directory for operational Share B, such as `./data/shares-primary`. |
+| `CO_SIGNER_RECOVERY_SHARES_DIR` | Protected temporary DKG destination for Share C, such as `./data/shares-recovery`; move the resulting artifact to offline custody after DKG. |
 | `CO_SIGNER_HTTP_ADDR` | `127.0.0.1:8081` unless private monitoring requires another binding. |
 
-Inject secrets through a service manager or secret-management platform. Do not commit a populated `.env` file.
+The two shares directories must be absolute, distinct, and non-overlapping. Do not use the legacy
+`CO_SIGNER_SHARES_DIR` variable. Both directories coexist on the Co-Signer host only for the
+minimum time required to complete DKG and separate Share C. Inject secrets through a service
+manager or secret-management platform. Do not commit a populated `.env` file.
 
 ## 4. Verify health and connectivity
 
@@ -240,6 +248,47 @@ Require all of the following before wallet creation:
 - Co-Signer: **Online**;
 - selected testnet chain: **Ready**.
 
+### Post-DKG Share B / Share C custody checkpoint
+
+Complete this checkpoint before creating an integration key, ledger account, or wallet.
+
+1. Wait until DKG is terminal, the MPC key and selected chains are ready, and no DKG worker is
+   still writing artifacts. Resolve the current MPC `keyId` and report these paths without reading
+   or displaying their contents:
+   - Share B: `<CO_SIGNER_PRIMARY_SHARES_DIR>/<keyId>.primary.json`;
+   - Share C: `<CO_SIGNER_RECOVERY_SHARES_DIR>/<keyId>.recovery.json`.
+2. Explain the signing model clearly:
+   - normal BroSettlement signing is a 2-of-3 quorum using platform Share A and client Share B;
+   - the running Co-Signer uses Share B only;
+   - Share C does not participate in normal signing and is the client's disaster-recovery share.
+3. Tell the user to make and verify a complete client-controlled backup of the exact immutable
+   Share C artifact together with the original 32-byte share-encryption key and its exact key ID.
+   Do not alter, decrypt, rename, re-encrypt, print, or upload the artifact. Share B also needs its
+   own recoverable backup with the matching encryption key and key ID, but that backup must be in
+   a different trust domain from Share C.
+4. Never place Share B and Share C in the same host, filesystem, disk, vault, cloud account,
+   backup set, recovery medium, or administrative/security domain. Never give either share to a
+   third party or place it in chat, email, a support ticket, or a shared drive. A person or system
+   with both B and C controls a signing quorum.
+5. Ask the user to confirm only that the independent Share C backup has been completed and
+   verified; do not ask for its destination. Then instruct the user to stop the Co-Signer
+   gracefully, remove the local `.recovery.json` copy from the active host, leave the configured
+   recovery directory private and empty, and restart. Do not copy, move, display, upload, or
+   delete the user's recovery backup. Never remove the active-host copy before backup verification.
+6. After the user confirms the restart, verify local `/health`, Console **Online**, pending intents,
+   `brosettlement mpc status`, and normal Share B signing readiness. Share C being absent from the
+   active host after this checkpoint is expected and must not be treated as loss of normal signing
+   readiness.
+7. Explain disaster recovery accurately: Share B plus Share C are cryptographically capable of
+   forming the client-controlled 2-of-3 quorum and signing without platform Share A or
+   BroSettlement participation. Co-Signer v1 does not currently ship a supported recovery CLI,
+   SDK, endpoint, or distributed recovery binary, so this capability requires a separately
+   audited recovery implementation and runbook. Do not describe the backup as a turnkey recovery
+   product or claim that recovery is operational until that tooling has been tested.
+
+If a later DKG creates a new Share C, repeat this checkpoint for the new `keyId`. Do not proceed to
+wallet creation while B and C remain together on the active Co-Signer host.
+
 ## 6. Create and test the first wallet
 
 1. Ask whether the user already has a separate integration API key and matching local private key
@@ -302,24 +351,31 @@ Require all of the following before wallet creation:
 ## Storage, backup, and recovery
 
 At the end of normal onboarding, do not ask the user for another protected directory and do not
-copy, move, archive, or upload secrets. The explicitly approved legacy archive for an incompatible
-upgrade is the only exception. Otherwise, read the resolved paths from the active configuration
+copy, move, archive, or upload secrets. The user-performed post-DKG Share C separation above and
+an explicitly approved legacy archive for an incompatible upgrade are the only exceptions.
+Otherwise, read the resolved paths from the active configuration
 and report the exact absolute location, purpose, and recovery importance of each artifact that
 exists in a compact table:
 
 - Co-Signer Ed25519 private/public PEM files;
 - integration Ed25519 private/public PEM files, when a separate integration key was created;
-- the matching share-encryption key;
-- the complete encrypted MPC shares directory;
+- the matching share-encryption key and its stable key ID;
+- the primary Share B directory and current immutable `.primary.json` artifact used by the active
+  Co-Signer;
+- the former active path of Share C and confirmation that the exact immutable `.recovery.json`
+  artifact is now in separately verified client custody, without asking for or exposing its
+  backup destination;
 - runtime configuration or launcher files, with a warning when any contains secret material.
 
 Explain which files are private and which public PEM files are non-secret. Recommend that the user
 personally preserve the artifacts in trusted encrypted or offline storage, without performing the
 copy. To move the same organization and Co-Signer to production infrastructure while retaining
-signing access to previously created wallets, restore the same complete encrypted MPC shares
-directory with its matching share-encryption key. Preserve API private keys when reusing their
-existing API Key IDs; API-key rotation is separate and does not recover MPC shares. Never edit
-share files, mix material between organizations, or initialize a replacement MPC key as a backup.
+normal signing access to previously created wallets, restore the same immutable Share B artifact
+with its matching share-encryption key and exact key ID. Preserve Share C separately for disaster
+recovery; never put it on the normal production Co-Signer. Preserve API private keys when reusing
+their existing API Key IDs; API-key rotation is separate and does not recover MPC shares. Never
+edit share files, mix material between organizations, co-locate B and C, or initialize a
+replacement MPC key as a backup.
 
 ## Troubleshooting order
 

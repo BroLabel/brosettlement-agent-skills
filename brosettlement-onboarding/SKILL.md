@@ -190,8 +190,10 @@ the executable using the Quickstart commands.
 
 Then:
 
-1. Create the protected persistent shares directory.
-2. Generate a separate share-encryption key with `600` permissions.
+1. Create separate, protected, non-overlapping primary and recovery shares directories for Share B
+   and Share C. Never place them under the same parent storage boundary in production.
+2. Generate one separate share-encryption key with `600` permissions and assign its stable
+   non-secret key ID. Preserve both for the lifetime of the artifacts.
 3. Determine `CO_SIGNER_MONOLITH_URL` from the previously captured admin-panel environment:
    - if the admin-panel hostname is `app-staging.brolabel.io` or otherwise clearly identifies
      staging, set it to `https://brosettlement-staging-api.brolabel.io/`;
@@ -263,6 +265,29 @@ Initialization completes only when:
 
 If DKG fails or expires, diagnose the terminal state before retrying. Do not create repeated
 initialization attempts blindly.
+
+### 8a. Separate Share C after DKG
+
+After DKG is terminal and the MPC key and chains are ready, follow the Share B/Share C custody
+checkpoint in the onboarding reference before creating wallets. Explain that normal BroSettlement
+signing uses platform Share A plus client Share B; Share C does not participate. Share B must remain
+available to the running Co-Signer, while Share C is a client-controlled recovery share.
+
+Show only the absolute artifact paths and purposes, never their contents. Require the user to make
+and verify a complete protected backup of Share C with the original share-encryption key and key
+ID. Ensure Share B has its own independent backup in a different trust domain. After explicit
+confirmation that Share C recovery custody is complete, instruct the user to stop the Co-Signer
+safely, remove the local Share C copy from the Co-Signer host without altering the backed-up
+artifact, restart, and verify that Share B signing remains ready. Do not copy or expose Share C
+yourself. Never leave both B and C on the active host, and never remove the local copy until the
+independent backup has been verified.
+
+Explain that B+C form a client-controlled 2-of-3 recovery quorum that is cryptographically capable
+of signing without platform Share A or BroSettlement participation. Also state that Co-Signer v1
+does not ship a supported recovery CLI, SDK, endpoint, or distributed recovery binary; never claim
+that disaster-recovery signing is operational until the client has an audited recovery tool and
+runbook. Never store B and C in one host, filesystem, vault, cloud account, backup set, or shared
+administrative domain, and never give either share to a third party.
 
 ### 9. Complete the Quickstart
 
@@ -376,8 +401,11 @@ For each item, explain its purpose:
 - Co-Signer Ed25519 private PEM: signs Co-Signer API requests for its current API Key ID;
 - Co-Signer public PEM: registered in Console and safe to display, but not a secret;
 - share-encryption key: decrypts the locally stored encrypted MPC share;
-- complete encrypted MPC shares directory: contains the client-controlled MPC material used to
-  participate in signing for wallets created under this MPC key;
+- primary Share B directory and artifact: remains available to the Co-Signer for normal A+B signing;
+- recovery Share C directory and artifact: must be backed up and removed from the active Co-Signer
+  host after DKG;
+- share-encryption key ID: non-secret binding required together with the original encryption key
+  to restore either immutable artifact;
 - integration Ed25519 private PEM: signs ledger, wallet, and other integration API requests for
   its current API Key ID;
 - integration public PEM: registered in Console and safe to display, but not a secret;
@@ -389,13 +417,12 @@ fingerprints that were not already approved for display, or environment-variable
 user to preserve these paths and make their own protected, encrypted backup in a trusted secret
 manager or offline storage. Do not ask where to save it and do not perform the copy.
 
-State clearly that moving the same BroSettlement organization and Co-Signer to production
-infrastructure without losing signing access to previously created wallets requires restoring the
-same complete encrypted MPC shares directory together with its matching share-encryption key.
-They are a matched recovery set; losing either can make the client-held MPC share unusable. Also
-preserve each API private key when the corresponding existing API Key ID will continue to be used;
-an API credential can instead be rotated through the supported Console process, but that does not
-replace or recover the MPC shares. Never initialize a replacement MPC key as a backup procedure.
+State clearly that retaining signing access requires the immutable Share B and Share C artifacts,
+the original share-encryption key, and its exact key ID. Keep B and C in separate client-controlled
+trust domains and never combine them in one backup. Losing B blocks normal signing; losing C removes
+the client recovery quorum. Also preserve each API private key when the corresponding existing API
+Key ID will continue to be used; rotating an API credential does not recover MPC shares. Never
+initialize a replacement MPC key as a backup procedure.
 
 ## Operating rules
 
@@ -408,6 +435,13 @@ replace or recover the MPC shares. Never initialize a replacement MPC key as a b
 - Do not treat local `ready: true` as end-to-end readiness. Also verify the Console heartbeat, MPC key status, and chain status.
 - Do not create a wallet before MPC is ready.
 - Do not change the API key, share-encryption key, or shares directory while DKG or signing is active.
+- After successful DKG, require verified independent custody for Share C and instruct the user to
+  remove its local artifact from the active Co-Signer host only after backup verification. Keep
+  only Share B available for normal signing.
+- Never store, back up, transmit, or administer Share B and Share C together. Do not grant a third
+  party access to either share or upload either artifact to chat, email, tickets, or shared drives.
+- Describe B+C as a cryptographic recovery quorum, not as a currently supported recovery product;
+  v1 requires separate audited recovery tooling before it can sign without BroSettlement.
 - During MPC readiness anomalies, compare the running Co-Signer with the official GitHub
   repository before proposing a reset or reinitialization. Never call an untagged commit a release.
 - Do not update the Co-Signer without explicit approval. Preserve the existing API credentials,
@@ -440,6 +474,8 @@ At the end, report each checkpoint without exposing secrets or claiming optional
 - Co-Signer local health;
 - Console heartbeat;
 - MPC/DKG status;
+- Share B operational custody, verified separate Share C backup, and confirmation that Share C is
+  absent from the active Co-Signer host;
 - chain readiness;
 - ledger account and wallet identifiers;
 - test transaction status;
