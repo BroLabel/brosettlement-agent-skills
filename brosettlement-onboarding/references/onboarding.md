@@ -282,10 +282,11 @@ Complete this checkpoint before creating an integration key, ledger account, or 
    readiness.
 7. Explain disaster recovery accurately: Share B plus Share C form the client-controlled 2-of-3
    quorum and can sign without platform Share A or BroSettlement participation. For one native TRX
-   transfer on TRON Nile or mainnet, use only the sibling `$brosettlement-disaster-recovery` skill
-   and its controlled ceremony. That source-only CLI creates, signs, saves, and broadcasts; it does
-   not support TRC-20, other chains, or sign-only recovery. Do not generalize this narrow workflow
-   into a turnkey recovery product for every wallet or asset.
+   or standard TRC-20 transfer on TRON Nile or mainnet, use only the sibling
+   `$brosettlement-disaster-recovery` skill and its controlled ceremony. That source-only CLI
+   creates, signs, saves, and broadcasts without BroSettlement API or Console. It does not support
+   other chains, arbitrary contract calls, or sign-only recovery. Do not generalize this narrow
+   workflow into a turnkey recovery product for every wallet or asset.
 
 If a later DKG creates a new Share C, repeat this checkpoint for the new `keyId`. Do not proceed to
 wallet creation while B and C remain together on the active Co-Signer host.

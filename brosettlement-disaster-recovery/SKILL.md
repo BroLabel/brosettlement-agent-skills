@@ -1,6 +1,6 @@
 ---
 name: brosettlement-disaster-recovery
-description: Run a controlled BroSettlement disaster-recovery ceremony that creates, Share B + Share C threshold-signs, saves, and broadcasts one native TRX transfer without BroSettlement participation. Use when the platform Share A or normal A+B signing path is unavailable and an authorized client must recover TRON Nile or TRON mainnet funds from immutable Co-Signer Share B and Share C artifacts. Also use to validate recovery prerequisites, explain B+C quorum custody, or diagnose the bundled recovery CLI. Do not use for routine withdrawals, TRC-20 tokens, other chains, sign-only/offline output, or normal BroSettlement API transactions.
+description: Run a controlled BroSettlement disaster-recovery ceremony that creates, Share B + Share C threshold-signs, saves, and broadcasts one native TRX or standard TRC-20 transfer without BroSettlement participation. Use when the platform Share A or normal A+B signing path is unavailable and an authorized client must recover TRON Nile or TRON mainnet funds from immutable Co-Signer Share B and Share C artifacts. Also use to validate recovery prerequisites, explain B+C quorum custody, or diagnose the bundled recovery CLI. Do not use for routine withdrawals, other chains, sign-only/offline output, or normal BroSettlement API transactions.
 ---
 
 # BroSettlement disaster recovery
@@ -13,9 +13,11 @@ a transfer. The executable source and pinned module files are in `scripts/`.
 
 ## Hard boundaries
 
-- Support exactly one native TRX transfer per invocation on `nile` or `mainnet`.
-- Use the fixed derivation path `m/44'/195'/0'/0/0`.
-- Do not use this workflow for TRC-20, arbitrary contracts, other derivation paths, or other chains.
+- Support exactly one native TRX or standard TRC-20 transfer per invocation on `nile` or `mainnet`.
+- Treat `--source` as the authoritative wallet identity. The CLI scans the bounded
+  `m/44'/195'/0'/0/index` range and proceeds only after an exact derived-address match.
+- Do not use this workflow for arbitrary contract calls, other TRON derivation branches, or other
+  chains.
 - Do not call BroSettlement APIs or require platform Share A. The only external service used by the
   CLI is the selected public TRON RPC.
 - The bundled CLI always creates, signs, saves, and broadcasts. It has no dry-run or sign-only mode.
@@ -49,11 +51,13 @@ Ask for these values and nothing secret:
 1. network: `nile` or `mainnet`;
 2. source TRON address;
 3. destination TRON address;
-4. exact native TRX amount, with no more than six fractional digits;
-5. a new absolute output path for the signed transaction JSON;
-6. absolute Share B artifact path;
-7. absolute Share C artifact path;
-8. absolute path to the matching share-encryption key.
+4. exact human-readable transfer amount;
+5. optional TRC-20 smart-contract address; omit it for native TRX;
+6. for TRC-20 only, an explicit maximum TRX fee limit;
+7. a new absolute output path for the signed transaction JSON;
+8. absolute Share B artifact path;
+9. absolute Share C artifact path;
+10. absolute path to the matching share-encryption key.
 
 Do not ask for the MPC key ID or encryption key reference; the CLI authenticates and derives them
 from the artifacts. Do not request API credentials.
@@ -82,7 +86,8 @@ Show a concise final summary containing only:
 - network and whether it is testnet or production;
 - source address;
 - destination address;
-- exact TRX amount;
+- asset: native TRX when no token contract is supplied, otherwise TRC-20 with its exact contract
+  address, discovered decimals, human-readable amount, atomic amount, and TRX fee limit;
 - output path;
 - that execution will temporarily combine B+C, sign, save, and immediately broadcast through the
   public TRON RPC.
@@ -93,7 +98,7 @@ authorization. If any transaction field changes, discard the confirmation and as
 
 ## 5. Execute exactly once
 
-After confirmation, run the private candidate binary once with all eight required flags. Pass only
+After confirmation, run the private candidate binary once. Pass only
 paths, never key or share contents:
 
 ```bash
@@ -107,6 +112,17 @@ paths, never key or share contents:
   --share-c </ABSOLUTE/PATH/TO/SHARE-C.recovery.json> \
   --encryption-key </ABSOLUTE/PATH/TO/share-encryption.key>
 ```
+
+For TRC-20, add the optional token selector and its required fee limit:
+
+```bash
+  --token-contract <TRC20_CONTRACT_ADDRESS> \
+  --fee-limit-trx <MAXIMUM_TRX_FEE>
+```
+
+Do not pass `--token-contract` for native TRX. The CLI reads the standard token's public
+`decimals()` and `balanceOf(address)`, simulates `transfer(address,uint256)`, and then constructs
+that exact call through the public TRON RPC. It never queries BroSettlement API or Console.
 
 Do not enable shell tracing, capture environment dumps, or place secret material in command-line
 values. The path names themselves may be sensitive; redact them from the final report.
@@ -122,7 +138,8 @@ Claim success only when the CLI returns JSON with all of the following:
 - `broadcastPerformed: true`;
 - `broadcastAccepted: true`;
 - a non-empty `txId`;
-- the expected network, source, destination, amount, and output file.
+- the expected network, source, destination, asset type, amount, optional token contract, and output
+  file.
 
 Report the public txID, network, source, destination, amount, expiration, and signed-transaction
 output path. The output is created with mode `600` before broadcast; keep it for audit and recovery
@@ -152,10 +169,12 @@ After success or failure:
   the actual protected file; never relax the check.
 - `Share B and Share C do not form one validated recovery quorum`: stop. Do not mix artifacts from
   different MPC keys, sessions, organizations, codecs, or encryption-key references.
-- `derived B+C public key does not match the requested source address`: stop. Reconfirm the wallet
-  address and correct recovery set; never override the source check.
+- `source address was not found in TRON derivation range`: stop. Reconfirm the exact public source
+  address and recovery set. Increase `--address-search-limit` only when the custodian knows the
+  wallet index lies beyond the default bounded scan; never override the exact address check.
 - insufficient balance: reduce the amount only after a new transaction confirmation or fund the
-  public address. The CLI checks native TRX balance, not token balances.
+  public address. For TRC-20, the CLI checks both the token balance and a conservative native TRX
+  fee reserve equal to the supplied fee limit.
 - RPC error after output creation: preserve the signed JSON and public txID; determine whether it
   was accepted or expired before considering another transaction.
 

@@ -1,5 +1,5 @@
-// recovery-tron-sign creates, threshold-signs, and broadcasts one TRON TRX
-// transfer with client-controlled Share B + Share C.
+// recovery-tron-sign creates, threshold-signs, and broadcasts one native TRX
+// or TRC-20 transfer with client-controlled Share B + Share C.
 //
 // Keep B and C in separate trust domains outside a controlled recovery
 // ceremony. This file contains no custody-platform API integration.
@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -50,20 +49,27 @@ const (
 	signingTimeout     = 4 * time.Minute
 	minimumRPCValidity = 30 * time.Second
 	tronAccountPath    = "m/44'/195'/0'"
-	tronChildPath      = "/0/0"
+	defaultSearchLimit = 10_000
+	maximumSearchLimit = 1_000_000
+	maximumTokenDigits = 30
+	maximumFeeLimitSun = int64(1_000_000_000)
+	transferSelector   = "a9059cbb"
 )
 
 var canonicalKeyIDPattern = regexp.MustCompile(`^mpc_key_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type options struct {
-	network           string
-	source            string
-	destination       string
-	amount            string
-	output            string
-	shareB            string
-	shareC            string
-	encryptionKeyPath string
+	network            string
+	source             string
+	destination        string
+	amount             string
+	tokenContract      string
+	feeLimitTRX        string
+	addressSearchLimit int
+	output             string
+	shareB             string
+	shareC             string
+	encryptionKeyPath  string
 }
 
 type networkConfig struct {
@@ -166,16 +172,31 @@ type unsignedTransaction struct {
 type rawTransactionData struct {
 	Expiration int64 `json:"expiration"`
 	Timestamp  int64 `json:"timestamp"`
+	FeeLimit   int64 `json:"fee_limit"`
 	Contracts  []struct {
 		Parameter struct {
 			Value struct {
-				Amount       int64  `json:"amount"`
-				OwnerAddress string `json:"owner_address"`
-				ToAddress    string `json:"to_address"`
+				Amount          int64  `json:"amount"`
+				OwnerAddress    string `json:"owner_address"`
+				ToAddress       string `json:"to_address"`
+				ContractAddress string `json:"contract_address"`
+				CallValue       int64  `json:"call_value"`
+				Data            string `json:"data"`
 			} `json:"value"`
 		} `json:"parameter"`
 		Type string `json:"type"`
 	} `json:"contract"`
+}
+
+type triggerResponse struct {
+	Result struct {
+		Result  bool   `json:"result"`
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"result"`
+	ConstantResult []string            `json:"constant_result"`
+	Transaction    unsignedTransaction `json:"transaction"`
+	TxID           string              `json:"txid"`
 }
 
 type signedTransaction struct {
@@ -197,12 +218,21 @@ type cliResult struct {
 	Status                string `json:"status"`
 	Network               string `json:"network"`
 	Chain                 string `json:"chain"`
+	AssetType             string `json:"assetType"`
 	SourceAddress         string `json:"sourceAddress"`
 	Destination           string `json:"destination,omitempty"`
 	AmountSun             int64  `json:"amountSun,omitempty"`
 	BalanceBeforeSun      int64  `json:"balanceBeforeSun,omitempty"`
+	TokenContract         string `json:"tokenContract,omitempty"`
+	TokenDecimals         *int   `json:"tokenDecimals,omitempty"`
+	AmountAtomic          string `json:"amountAtomic,omitempty"`
+	TokenBalanceBefore    string `json:"tokenBalanceBeforeAtomic,omitempty"`
+	FeeLimitSun           int64  `json:"feeLimitSun,omitempty"`
 	AccountPath           string `json:"accountPath"`
 	ChildPath             string `json:"childPath"`
+	FullPath              string `json:"fullPath"`
+	AddressIndex          int    `json:"addressIndex"`
+	AddressSearchLimit    int    `json:"addressSearchLimit"`
 	DerivedAddressMatch   bool   `json:"derivedAddressMatch"`
 	ArtifactsMatch        bool   `json:"artifactsMatch"`
 	SignatureVerified     bool   `json:"signatureVerified,omitempty"`
@@ -235,16 +265,20 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&opts.network, "network", "", "required network: nile or mainnet")
 	flags.StringVar(&opts.source, "source", "", "required TRON source address on the selected network")
 	flags.StringVar(&opts.destination, "to", "", "required TRON destination address on the selected network")
-	flags.StringVar(&opts.amount, "amount", "", "required exact TRX amount, up to 6 decimal places")
+	flags.StringVar(&opts.amount, "amount", "", "required exact human-readable asset amount")
+	flags.StringVar(&opts.tokenContract, "token-contract", "", "optional TRC-20 contract address; omit for native TRX")
+	flags.StringVar(&opts.feeLimitTRX, "fee-limit-trx", "", "required maximum TRX fee when --token-contract is set")
+	flags.IntVar(&opts.addressSearchLimit, "address-search-limit", defaultSearchLimit, "maximum /0/index paths checked against --source")
 	flags.StringVar(&opts.output, "output", "", "required absolute path for the signed transaction JSON; must not already exist")
 	flags.StringVar(&opts.shareB, "share-b", "", "required absolute path to encrypted Share B artifact")
 	flags.StringVar(&opts.shareC, "share-c", "", "required absolute path to encrypted Share C artifact")
 	flags.StringVar(&opts.encryptionKeyPath, "encryption-key", "", "required absolute path to the matching share encryption key")
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Create, B+C threshold-sign, save, and broadcast a TRON TRX transaction.")
-		fmt.Fprintln(flags.Output(), "All eight options are required; key metadata is authenticated from the artifacts.")
+		fmt.Fprintln(flags.Output(), "Create, B+C threshold-sign, save, and broadcast one native TRX or TRC-20 transfer.")
+		fmt.Fprintln(flags.Output(), "The source address is the only derivation input: the CLI discovers /0/index and requires an exact address match.")
 		fmt.Fprintln(flags.Output(), "\nUsage:")
 		fmt.Fprintln(flags.Output(), "  go run ./recovery-tron-sign.go --network <nile|mainnet> --source <ADDRESS> --to <ADDRESS> --amount <TRX> --output <ABSOLUTE_JSON_PATH> --share-b <ABSOLUTE_PATH> --share-c <ABSOLUTE_PATH> --encryption-key <ABSOLUTE_PATH>")
+		fmt.Fprintln(flags.Output(), "  go run ./recovery-tron-sign.go --network <nile|mainnet> --token-contract <ADDRESS> --fee-limit-trx <TRX> --source <ADDRESS> --to <ADDRESS> --amount <TOKEN_AMOUNT> --output <ABSOLUTE_JSON_PATH> --share-b <ABSOLUTE_PATH> --share-c <ABSOLUTE_PATH> --encryption-key <ABSOLUTE_PATH>")
 		fmt.Fprintln(flags.Output(), "\nOptions:")
 		flags.PrintDefaults()
 	}
@@ -288,26 +322,74 @@ func run(opts options) error {
 		return errors.New("read protected derivation material")
 	}
 	defer clear(chainCode)
-	context, derivedPublicKey, derivedAddress, err := deriveWallet(primary.accountPublic, chainCode, opts, network)
+	context, derivedPublicKey, derivedAddress, addressIndex, err := discoverWallet(primary.accountPublic, chainCode, opts.source, opts.addressSearchLimit, network)
 	if err != nil {
 		return err
 	}
 	if derivedAddress != opts.source {
 		return errors.New("derived B+C public key does not match the requested source address")
 	}
-	amountSun, err := parseTRXAmount(opts.amount)
-	if err != nil {
-		return err
-	}
 	client := &http.Client{Timeout: 20 * time.Second}
-	balance, err := fetchBalance(client, network, nil, opts.source)
-	if err != nil {
-		return err
+	var (
+		transaction         unsignedTransaction
+		raw                 rawTransactionData
+		digest              []byte
+		amountSun           int64
+		balanceSun          int64
+		tokenDecimals       int
+		amountAtomic        *big.Int
+		tokenBalance        *big.Int
+		feeLimitSun         int64
+		tokenDecimalsResult *int
+	)
+	assetType := requestedAssetType(opts)
+	switch assetType {
+	case "trx":
+		amountSun, err = parseTRXAmount(opts.amount)
+		if err != nil {
+			return err
+		}
+		balanceSun, err = fetchBalance(client, network, nil, opts.source)
+		if err != nil {
+			return err
+		}
+		if balanceSun < amountSun {
+			return fmt.Errorf("insufficient public on-chain TRX balance: have %d sun, need %d sun", balanceSun, amountSun)
+		}
+		transaction, raw, digest, err = createTransaction(client, network, nil, opts.source, opts.destination, amountSun)
+	case "trc20":
+		feeLimitSun, err = parseTRXValue(opts.feeLimitTRX, "--fee-limit-trx")
+		if err != nil {
+			return fmt.Errorf("invalid --fee-limit-trx: %w", err)
+		}
+		tokenDecimals, err = fetchTRC20Decimals(client, network, nil, opts.source, opts.tokenContract)
+		if err != nil {
+			return err
+		}
+		tokenDecimalsResult = &tokenDecimals
+		amountAtomic, err = parseDecimalAmount(opts.amount, tokenDecimals, "--amount")
+		if err != nil {
+			return err
+		}
+		tokenBalance, err = fetchTRC20Balance(client, network, nil, opts.source, opts.tokenContract)
+		if err != nil {
+			return err
+		}
+		if tokenBalance.Cmp(amountAtomic) < 0 {
+			return fmt.Errorf("insufficient public on-chain TRC-20 balance: have %s atomic units, need %s", tokenBalance, amountAtomic)
+		}
+		balanceSun, err = fetchBalance(client, network, nil, opts.source)
+		if err != nil {
+			return err
+		}
+		if balanceSun < feeLimitSun {
+			return fmt.Errorf("insufficient public on-chain TRX fee reserve: have %d sun, require at least fee limit %d sun", balanceSun, feeLimitSun)
+		}
+		if err := simulateTRC20Transfer(client, network, nil, opts.source, opts.destination, opts.tokenContract, amountAtomic); err != nil {
+			return err
+		}
+		transaction, raw, digest, err = createTRC20Transaction(client, network, nil, opts.source, opts.destination, opts.tokenContract, amountAtomic, feeLimitSun)
 	}
-	if balance < amountSun {
-		return fmt.Errorf("insufficient public on-chain balance: have %d sun, need %d sun", balance, amountSun)
-	}
-	transaction, raw, digest, err := createTransaction(client, network, nil, opts.source, opts.destination, amountSun)
 	if err != nil {
 		return err
 	}
@@ -344,12 +426,21 @@ func run(opts options) error {
 		Status:                "BROADCAST_ACCEPTED",
 		Network:               network.name,
 		Chain:                 network.chain,
+		AssetType:             strings.ToUpper(assetType),
 		SourceAddress:         opts.source,
 		Destination:           opts.destination,
 		AmountSun:             amountSun,
-		BalanceBeforeSun:      balance,
+		BalanceBeforeSun:      balanceSun,
+		TokenContract:         opts.tokenContract,
+		TokenDecimals:         tokenDecimalsResult,
+		AmountAtomic:          bigIntString(amountAtomic),
+		TokenBalanceBefore:    bigIntString(tokenBalance),
+		FeeLimitSun:           feeLimitSun,
 		AccountPath:           tronAccountPath,
-		ChildPath:             tronChildPath,
+		ChildPath:             context.ChildPath,
+		FullPath:              context.FullPath,
+		AddressIndex:          addressIndex,
+		AddressSearchLimit:    opts.addressSearchLimit,
 		DerivedAddressMatch:   true,
 		ArtifactsMatch:        true,
 		SignatureVerified:     true,
@@ -368,6 +459,9 @@ func validateOptions(opts options) error {
 	if err := validateTronAddress(opts.source); err != nil {
 		return errors.New("invalid source TRON address")
 	}
+	if opts.addressSearchLimit < 1 || opts.addressSearchLimit > maximumSearchLimit {
+		return fmt.Errorf("--address-search-limit must be between 1 and %d", maximumSearchLimit)
+	}
 	if opts.shareB == "" || opts.shareC == "" || opts.encryptionKeyPath == "" {
 		return errors.New("--share-b, --share-c, and --encryption-key are required")
 	}
@@ -385,8 +479,27 @@ func validateOptions(opts options) error {
 	if opts.source == opts.destination {
 		return errors.New("source and destination must differ")
 	}
-	if _, err := parseTRXAmount(opts.amount); err != nil {
-		return err
+	if opts.tokenContract == "" {
+		if opts.feeLimitTRX != "" {
+			return errors.New("--fee-limit-trx is only valid when --token-contract is set")
+		}
+		if _, err := parseTRXAmount(opts.amount); err != nil {
+			return err
+		}
+	} else {
+		if err := validateTronAddress(opts.tokenContract); err != nil {
+			return errors.New("--token-contract must be a valid TRON address")
+		}
+		if _, err := parseDecimalAmount(opts.amount, maximumTokenDigits, "--amount"); err != nil {
+			return err
+		}
+		feeLimit, err := parseTRXValue(opts.feeLimitTRX, "--fee-limit-trx")
+		if err != nil {
+			return fmt.Errorf("invalid --fee-limit-trx: %w", err)
+		}
+		if feeLimit > maximumFeeLimitSun {
+			return fmt.Errorf("--fee-limit-trx must not exceed %d TRX", maximumFeeLimitSun/1_000_000)
+		}
 	}
 	if !filepath.IsAbs(opts.output) {
 		return errors.New("--output must be an absolute path")
@@ -400,6 +513,13 @@ func validateOptions(opts options) error {
 		return errors.New("inspect output path")
 	}
 	return nil
+}
+
+func requestedAssetType(opts options) string {
+	if opts.tokenContract == "" {
+		return "trx"
+	}
+	return "trc20"
 }
 
 func resolveNetwork(raw string) (networkConfig, error) {
@@ -769,42 +889,82 @@ func chainCodeFromShare(blob []byte) ([]byte, error) {
 	return append([]byte(nil), material.ChainCode...), nil
 }
 
-func deriveWallet(accountPublic, chainCode []byte, opts options, network networkConfig) (coretss.DerivationContext, string, string, error) {
+func discoverWallet(accountPublic, chainCode []byte, source string, searchLimit int, network networkConfig) (coretss.DerivationContext, string, string, int, error) {
 	point, err := btcec.ParsePubKey(accountPublic, btcec.S256())
 	if err != nil {
-		return coretss.DerivationContext{}, "", "", errors.New("parse account public key")
+		return coretss.DerivationContext{}, "", "", 0, errors.New("parse account public key")
 	}
-	derivation := coretss.DerivationContext{
-		ProfileID:       "tron-recovery-cli-" + network.name,
-		Chain:           network.chain,
-		Algorithm:       coretss.AlgorithmECDSA,
-		Curve:           coretss.CurveSecp256k1,
-		Scheme:          coretss.DerivationSchemeBIP32Secp256k1,
-		PublicKeyFormat: coretss.PublicKeyFormatUncompressedHex,
-		AccountPath:     tronAccountPath,
-		ChildPath:       tronChildPath,
-		FullPath:        strings.TrimSuffix(tronAccountPath, "/") + tronChildPath,
-		AddressEncoding: "tron_base58check",
-		ExpectedAddress: opts.source,
+	accountPublicHex := hex.EncodeToString(point.SerializeUncompressed())
+	for index := 0; index < searchLimit; index++ {
+		childPath := fmt.Sprintf("/0/%d", index)
+		derivation := coretss.DerivationContext{
+			ProfileID:       "tron-recovery-cli-" + network.name,
+			Chain:           network.chain,
+			Algorithm:       coretss.AlgorithmECDSA,
+			Curve:           coretss.CurveSecp256k1,
+			Scheme:          coretss.DerivationSchemeBIP32Secp256k1,
+			PublicKeyFormat: coretss.PublicKeyFormatUncompressedHex,
+			AccountPath:     tronAccountPath,
+			ChildPath:       childPath,
+			FullPath:        strings.TrimSuffix(tronAccountPath, "/") + childPath,
+			AddressEncoding: "tron_base58check",
+			ExpectedAddress: source,
+		}
+		derivedPublicKey, err := coretss.DeriveECDSAChildPublicKey(accountPublicHex, chainCode, derivation)
+		if err != nil {
+			return coretss.DerivationContext{}, "", "", 0, errors.New("derive TRON child public key during source-address discovery")
+		}
+		derivedAddress, err := tronAddressFromPublicKey(derivedPublicKey)
+		if err != nil {
+			return coretss.DerivationContext{}, "", "", 0, err
+		}
+		if derivedAddress == source {
+			derivation.DerivedPublicKey = derivedPublicKey
+			return derivation, derivedPublicKey, derivedAddress, index, nil
+		}
 	}
-	derivedPublicKey, err := coretss.DeriveECDSAChildPublicKey(hex.EncodeToString(point.SerializeUncompressed()), chainCode, derivation)
-	if err != nil {
-		return coretss.DerivationContext{}, "", "", errors.New("derive TRON child public key")
-	}
-	derivedAddress, err := tronAddressFromPublicKey(derivedPublicKey)
-	if err != nil {
-		return coretss.DerivationContext{}, "", "", err
-	}
-	derivation.DerivedPublicKey = derivedPublicKey
-	return derivation, derivedPublicKey, derivedAddress, nil
+	return coretss.DerivationContext{}, "", "", 0, fmt.Errorf("source address was not found in TRON derivation range m/44'/195'/0'/0/[0,%d)", searchLimit)
 }
 
 func validateTronAddress(address string) error {
 	payload, version, err := base58.CheckDecode(address)
 	if err != nil || version != 0x41 || len(payload) != 20 {
+		clear(payload)
 		return errors.New("invalid TRON Base58Check address")
 	}
+	clear(payload)
 	return nil
+}
+
+func decodeTronAddress(address string) ([]byte, error) {
+	if len(address) == 42 && strings.HasPrefix(strings.ToLower(address), "41") {
+		decoded, err := hex.DecodeString(address)
+		if err == nil && len(decoded) == 21 && decoded[0] == 0x41 {
+			return decoded, nil
+		}
+		clear(decoded)
+		return nil, errors.New("invalid TRON hex address")
+	}
+	payload, version, err := base58.CheckDecode(address)
+	if err != nil || version != 0x41 || len(payload) != 20 {
+		clear(payload)
+		return nil, errors.New("invalid TRON Base58Check address")
+	}
+	return append([]byte{version}, payload...), nil
+}
+
+func sameTronAddress(first, second string) bool {
+	firstBytes, firstErr := decodeTronAddress(first)
+	if firstErr != nil {
+		return false
+	}
+	defer clear(firstBytes)
+	secondBytes, secondErr := decodeTronAddress(second)
+	if secondErr != nil {
+		return false
+	}
+	defer clear(secondBytes)
+	return bytes.Equal(firstBytes, secondBytes)
 }
 
 func tronAddressFromPublicKey(publicKeyHex string) (string, error) {
@@ -820,33 +980,49 @@ func tronAddressFromPublicKey(publicKeyHex string) (string, error) {
 }
 
 func parseTRXAmount(raw string) (int64, error) {
-	if raw == "" || strings.TrimSpace(raw) != raw || strings.HasPrefix(raw, "+") || strings.HasPrefix(raw, "-") {
-		return 0, errors.New("--amount must be a positive decimal with up to 6 fractional digits")
+	return parseTRXValue(raw, "--amount")
+}
+
+func parseTRXValue(raw, field string) (int64, error) {
+	amount, err := parseDecimalAmount(raw, 6, field)
+	if err != nil {
+		return 0, err
+	}
+	if !amount.IsInt64() {
+		return 0, fmt.Errorf("%s is too large", field)
+	}
+	return amount.Int64(), nil
+}
+
+func parseDecimalAmount(raw string, decimals int, field string) (*big.Int, error) {
+	if decimals < 0 || decimals > maximumTokenDigits || raw == "" || strings.TrimSpace(raw) != raw || strings.HasPrefix(raw, "+") || strings.HasPrefix(raw, "-") {
+		return nil, fmt.Errorf("%s must be a positive decimal with up to %d fractional digits", field, decimals)
 	}
 	parts := strings.Split(raw, ".")
-	if len(parts) > 2 || parts[0] == "" || (len(parts) == 2 && parts[1] == "") {
-		return 0, errors.New("--amount must be a positive decimal with up to 6 fractional digits")
+	if len(parts) > 2 || parts[0] == "" || (len(parts) == 2 && parts[1] == "") || !decimalDigits(parts[0]) ||
+		(len(parts) == 2 && (!decimalDigits(parts[1]) || len(parts[1]) > decimals)) {
+		return nil, fmt.Errorf("%s must be a positive decimal with up to %d fractional digits", field, decimals)
 	}
-	if !decimalDigits(parts[0]) || (len(parts) == 2 && (!decimalDigits(parts[1]) || len(parts[1]) > 6)) {
-		return 0, errors.New("--amount must be a positive decimal with up to 6 fractional digits")
-	}
-	whole, err := strconv.ParseUint(parts[0], 10, 63)
-	if err != nil || whole > uint64((int64(^uint64(0)>>1))/1_000_000) {
-		return 0, errors.New("--amount is too large")
-	}
-	fraction := uint64(0)
+	fraction := ""
 	if len(parts) == 2 {
-		padded := parts[1] + strings.Repeat("0", 6-len(parts[1]))
-		fraction, err = strconv.ParseUint(padded, 10, 32)
-		if err != nil {
-			return 0, errors.New("invalid fractional TRX amount")
-		}
+		fraction = parts[1]
 	}
-	amount := int64(whole*1_000_000 + fraction)
-	if amount <= 0 {
-		return 0, errors.New("--amount must be greater than zero")
+	atomicText := strings.TrimLeft(parts[0]+fraction+strings.Repeat("0", decimals-len(fraction)), "0")
+	if atomicText == "" {
+		return nil, fmt.Errorf("%s must be greater than zero", field)
+	}
+	amount, ok := new(big.Int).SetString(atomicText, 10)
+	if !ok || amount.Sign() <= 0 || amount.BitLen() > 256 {
+		return nil, fmt.Errorf("%s is too large", field)
 	}
 	return amount, nil
+}
+
+func bigIntString(value *big.Int) string {
+	if value == nil {
+		return ""
+	}
+	return value.String()
 }
 
 func decimalDigits(raw string) bool {
@@ -876,6 +1052,138 @@ func fetchBalance(client *http.Client, network networkConfig, apiKey []byte, add
 	return account.Balance, nil
 }
 
+func fetchTRC20Decimals(client *http.Client, network networkConfig, apiKey []byte, owner, contract string) (int, error) {
+	value, err := callTRC20Uint256(client, network, apiKey, owner, contract, "decimals()", "")
+	if err != nil || !value.IsInt64() || value.Int64() < 0 || value.Int64() > maximumTokenDigits {
+		return 0, errors.New("TRC-20 decimals() must return an integer between 0 and 30")
+	}
+	return int(value.Int64()), nil
+}
+
+func fetchTRC20Balance(client *http.Client, network networkConfig, apiKey []byte, owner, contract string) (*big.Int, error) {
+	parameter, err := encodeTRONABIAddress(owner)
+	if err != nil {
+		return nil, errors.New("encode source address for TRC-20 balanceOf")
+	}
+	value, err := callTRC20Uint256(client, network, apiKey, owner, contract, "balanceOf(address)", parameter)
+	if err != nil {
+		return nil, fmt.Errorf("query TRC-20 balance through %s RPC", network.name)
+	}
+	return value, nil
+}
+
+func simulateTRC20Transfer(client *http.Client, network networkConfig, apiKey []byte, owner, destination, contract string, amount *big.Int) error {
+	parameter, err := encodeTRC20TransferParameters(destination, amount)
+	if err != nil {
+		return err
+	}
+	value, err := callTRC20Uint256(client, network, apiKey, owner, contract, "transfer(address,uint256)", parameter)
+	if err != nil || value.Cmp(big.NewInt(1)) != 0 {
+		return fmt.Errorf("TRC-20 transfer simulation through %s RPC did not return true", network.name)
+	}
+	return nil
+}
+
+func callTRC20Uint256(client *http.Client, network networkConfig, apiKey []byte, owner, contract, selector, parameter string) (*big.Int, error) {
+	body, _ := json.Marshal(map[string]any{
+		"owner_address":     owner,
+		"contract_address":  contract,
+		"function_selector": selector,
+		"parameter":         parameter,
+		"visible":           true,
+	})
+	defer clear(body)
+	response, err := postRPCJSON(client, network, apiKey, "/wallet/triggerconstantcontract", body)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(response)
+	var trigger triggerResponse
+	if err := json.Unmarshal(response, &trigger); err != nil || !trigger.Result.Result || len(trigger.ConstantResult) != 1 {
+		return nil, errors.New("validate TRC-20 constant-call response")
+	}
+	decoded, err := hex.DecodeString(trigger.ConstantResult[0])
+	if err != nil || len(decoded) != 32 {
+		clear(decoded)
+		return nil, errors.New("TRC-20 constant call must return exactly one uint256 word")
+	}
+	value := new(big.Int).SetBytes(decoded)
+	clear(decoded)
+	return value, nil
+}
+
+func createTRC20Transaction(client *http.Client, network networkConfig, apiKey []byte, source, destination, contract string, amount *big.Int, feeLimitSun int64) (unsignedTransaction, rawTransactionData, []byte, error) {
+	parameter, err := encodeTRC20TransferParameters(destination, amount)
+	if err != nil {
+		return unsignedTransaction{}, rawTransactionData{}, nil, err
+	}
+	expectedData := transferSelector + parameter
+	body, _ := json.Marshal(map[string]any{
+		"owner_address":     source,
+		"contract_address":  contract,
+		"function_selector": "transfer(address,uint256)",
+		"parameter":         parameter,
+		"fee_limit":         feeLimitSun,
+		"call_value":        0,
+		"visible":           true,
+	})
+	defer clear(body)
+	response, err := postRPCJSON(client, network, apiKey, "/wallet/triggersmartcontract", body)
+	if err != nil {
+		return unsignedTransaction{}, rawTransactionData{}, nil, fmt.Errorf("create unsigned TRC-20 transaction through %s RPC", network.name)
+	}
+	defer clear(response)
+	var trigger triggerResponse
+	if err := json.Unmarshal(response, &trigger); err != nil || !trigger.Result.Result {
+		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("validate TRC-20 trigger response")
+	}
+	transaction := trigger.Transaction
+	if transaction.TxID == "" || transaction.RawDataHex == "" || transaction.Error != "" ||
+		(trigger.TxID != "" && !strings.EqualFold(trigger.TxID, transaction.TxID)) {
+		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("validate unsigned TRC-20 transaction response")
+	}
+	digest, err := validateTransactionDigest(transaction)
+	if err != nil {
+		return unsignedTransaction{}, rawTransactionData{}, nil, err
+	}
+	var raw rawTransactionData
+	if err := json.Unmarshal(transaction.RawData, &raw); err != nil || len(raw.Contracts) != 1 || raw.Contracts[0].Type != "TriggerSmartContract" ||
+		!sameTronAddress(raw.Contracts[0].Parameter.Value.OwnerAddress, source) ||
+		!sameTronAddress(raw.Contracts[0].Parameter.Value.ContractAddress, contract) ||
+		raw.Contracts[0].Parameter.Value.CallValue != 0 || !strings.EqualFold(raw.Contracts[0].Parameter.Value.Data, expectedData) ||
+		raw.FeeLimit != feeLimitSun || raw.Expiration < time.Now().Add(minimumRPCValidity).UnixMilli() {
+		clear(digest)
+		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("unsigned TRC-20 transaction does not match the requested signing intent")
+	}
+	return transaction, raw, digest, nil
+}
+
+func encodeTRC20TransferParameters(destination string, amount *big.Int) (string, error) {
+	addressWord, err := encodeTRONABIAddress(destination)
+	if err != nil {
+		return "", errors.New("encode TRC-20 destination address")
+	}
+	if amount == nil || amount.Sign() <= 0 || amount.BitLen() > 256 {
+		return "", errors.New("invalid TRC-20 atomic amount")
+	}
+	amountWord := make([]byte, 32)
+	amount.FillBytes(amountWord)
+	defer clear(amountWord)
+	return addressWord + hex.EncodeToString(amountWord), nil
+}
+
+func encodeTRONABIAddress(address string) (string, error) {
+	decoded, err := decodeTronAddress(address)
+	if err != nil {
+		return "", err
+	}
+	defer clear(decoded)
+	word := make([]byte, 32)
+	copy(word[len(word)-len(decoded):], decoded)
+	defer clear(word)
+	return hex.EncodeToString(word), nil
+}
+
 func createTransaction(client *http.Client, network networkConfig, apiKey []byte, source, destination string, amountSun int64) (unsignedTransaction, rawTransactionData, []byte, error) {
 	body, _ := json.Marshal(map[string]any{
 		"owner_address": source,
@@ -893,22 +1201,32 @@ func createTransaction(client *http.Client, network networkConfig, apiKey []byte
 	if err := json.Unmarshal(response, &transaction); err != nil || transaction.Error != "" || transaction.TxID == "" || transaction.RawDataHex == "" {
 		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("validate unsigned transaction response")
 	}
-	rawBytes, err := hex.DecodeString(transaction.RawDataHex)
+	digest, err := validateTransactionDigest(transaction)
 	if err != nil {
-		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("decode unsigned transaction raw data")
+		return unsignedTransaction{}, rawTransactionData{}, nil, err
+	}
+	var raw rawTransactionData
+	if err := json.Unmarshal(transaction.RawData, &raw); err != nil || len(raw.Contracts) != 1 || raw.Contracts[0].Type != "TransferContract" ||
+		!sameTronAddress(raw.Contracts[0].Parameter.Value.OwnerAddress, source) || !sameTronAddress(raw.Contracts[0].Parameter.Value.ToAddress, destination) ||
+		raw.Contracts[0].Parameter.Value.Amount != amountSun || raw.Expiration < time.Now().Add(minimumRPCValidity).UnixMilli() {
+		clear(digest)
+		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("unsigned transaction does not match the requested signing intent")
+	}
+	return transaction, raw, digest, nil
+}
+
+func validateTransactionDigest(transaction unsignedTransaction) ([]byte, error) {
+	rawBytes, err := hex.DecodeString(transaction.RawDataHex)
+	if err != nil || len(rawBytes) == 0 {
+		clear(rawBytes)
+		return nil, errors.New("decode unsigned transaction raw data")
 	}
 	hash := sha256.Sum256(rawBytes)
 	clear(rawBytes)
 	if !strings.EqualFold(hex.EncodeToString(hash[:]), transaction.TxID) {
-		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("transaction ID does not match SHA-256(raw_data)")
+		return nil, errors.New("transaction ID does not match SHA-256(raw_data)")
 	}
-	var raw rawTransactionData
-	if err := json.Unmarshal(transaction.RawData, &raw); err != nil || len(raw.Contracts) != 1 || raw.Contracts[0].Type != "TransferContract" ||
-		raw.Contracts[0].Parameter.Value.OwnerAddress != source || raw.Contracts[0].Parameter.Value.ToAddress != destination ||
-		raw.Contracts[0].Parameter.Value.Amount != amountSun || raw.Expiration < time.Now().Add(minimumRPCValidity).UnixMilli() {
-		return unsignedTransaction{}, rawTransactionData{}, nil, errors.New("unsigned transaction does not match the requested signing intent")
-	}
-	return transaction, raw, append([]byte(nil), hash[:]...), nil
+	return append([]byte(nil), hash[:]...), nil
 }
 
 func postRPCJSON(client *http.Client, network networkConfig, apiKey []byte, path string, body []byte) ([]byte, error) {

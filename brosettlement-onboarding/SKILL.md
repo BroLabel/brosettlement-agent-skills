@@ -283,9 +283,10 @@ yourself. Never leave both B and C on the active host, and never remove the loca
 independent backup has been verified.
 
 Explain that B+C form a client-controlled 2-of-3 recovery quorum that can sign without platform
-Share A or BroSettlement participation. For a native TRX recovery transfer on TRON Nile or mainnet,
-hand off only to the sibling `$brosettlement-disaster-recovery` skill and its controlled ceremony.
-Do not claim support for TRC-20, other chains, or sign-only recovery. Never store B and C in one
+Share A or BroSettlement participation. For a native TRX or standard TRC-20 recovery transfer on
+TRON Nile or mainnet, hand off only to the sibling `$brosettlement-disaster-recovery` skill and its
+controlled ceremony. Do not claim support for arbitrary contracts, other chains, or sign-only
+recovery. Never store B and C in one
 host, filesystem, vault, cloud account, backup set, or shared administrative domain outside the
 short recovery execution window, and never give either share to a third party.
 
@@ -440,8 +441,9 @@ initialize a replacement MPC key as a backup procedure.
   only Share B available for normal signing.
 - Never store, back up, transmit, or administer Share B and Share C together. Do not grant a third
   party access to either share or upload either artifact to chat, email, tickets, or shared drives.
-- Use `$brosettlement-disaster-recovery` only for its supported native TRX Nile/mainnet recovery
-  ceremony. Do not generalize that narrow tool into recovery support for other assets or chains.
+- Use `$brosettlement-disaster-recovery` only for its supported native TRX or standard TRC-20
+  Nile/mainnet recovery ceremony. Do not generalize it into support for other chains or arbitrary
+  contract calls.
 - During MPC readiness anomalies, compare the running Co-Signer with the official GitHub
   repository before proposing a reset or reinitialization. Never call an untagged commit a release.
 - Do not update the Co-Signer without explicit approval. Preserve the existing API credentials,

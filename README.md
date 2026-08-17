@@ -16,7 +16,7 @@ and client-controlled disaster recovery.
 |---|---|
 | [`brosettlement-onboarding`](brosettlement-onboarding/) | Guides a user from account access through manual API-key creation, Co-Signer installation, MPC initialization, readiness checks, and the first testnet wallet. |
 | [`brosettlement-api`](brosettlement-api/) | Discovers the current Swagger contract, sends Ed25519-signed REST requests, lists API operations, and listens to WebSocket events. |
-| [`brosettlement-disaster-recovery`](brosettlement-disaster-recovery/) | Runs a controlled Share B + Share C ceremony to create, threshold-sign, save, and broadcast one native TRX recovery transfer without BroSettlement participation. |
+| [`brosettlement-disaster-recovery`](brosettlement-disaster-recovery/) | Runs a controlled Share B + Share C ceremony to create, threshold-sign, save, and broadcast one native TRX or standard TRC-20 recovery transfer without BroSettlement participation. |
 
 The onboarding skill uses the API skill for every signed request and remote status check. API-key
 creation remains a manual user action in BroSettlement Console. The disaster-recovery skill is an
@@ -142,9 +142,10 @@ logs.
 
 ## Disaster recovery CLI
 
-The disaster-recovery skill includes a separate source-only Go CLI. It supports one native TRX
-transfer on TRON Nile or TRON mainnet using the client-controlled Share B + Share C quorum. It does
-not use BroSettlement APIs, support TRC-20, or provide a sign-only mode.
+The disaster-recovery skill includes a separate source-only Go CLI. It supports one native TRX or
+standard TRC-20 transfer on TRON Nile or TRON mainnet using the client-controlled Share B + Share C
+quorum. The optional `--token-contract` selects TRC-20; omitting it selects native TRX. It does not
+use BroSettlement API/Console or provide a sign-only mode.
 
 Run it only through the controlled workflow in
 [`brosettlement-disaster-recovery/SKILL.md`](brosettlement-disaster-recovery/SKILL.md). The skill

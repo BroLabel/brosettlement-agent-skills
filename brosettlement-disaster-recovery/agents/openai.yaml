@@ -1,4 +1,4 @@
 interface:
   display_name: "BroSettlement Disaster Recovery"
-  short_description: "Recover TRON transfers with Share B + Share C"
-  default_prompt: "Use $brosettlement-disaster-recovery to safely create, threshold-sign, and broadcast a TRON recovery transfer with Share B and Share C."
+  short_description: "Recover TRX or TRC-20 with Share B + Share C"
+  default_prompt: "Use $brosettlement-disaster-recovery to safely create, threshold-sign, and broadcast a native TRX or TRC-20 recovery transfer with Share B and Share C."
