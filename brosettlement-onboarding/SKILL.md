@@ -1,6 +1,6 @@
 ---
 name: brosettlement-onboarding
-description: Run an interactive BroSettlement onboarding wizard from account access to a working testnet wallet, using the companion brosettlement-api skill for signed API operations and status verification. Use when a user wants step-by-step help creating or checking a BroSettlement account, choosing a Co-Signer installation folder, generating Ed25519 credentials, receiving manual Console instructions for user-created API keys, installing and starting the client-controlled Co-Signer, initializing MPC/DKG, verifying readiness, and creating the first ledger account and wallet.
+description: Run an interactive BroSettlement onboarding wizard from account access to a working testnet wallet, using the companion brosettlement-api skill for signed API operations and status verification. Use when a user wants step-by-step help creating or checking a BroSettlement account, choosing a Co-Signer installation folder, generating Ed25519 credentials, receiving manual Console instructions for user-created API keys, installing and starting the client-controlled Co-Signer, initializing MPC/DKG, verifying readiness, diagnosing Co-Signer version drift or MPC readiness anomalies, and creating the first ledger account and wallet.
 ---
 
 # BroSettlement onboarding
@@ -223,6 +223,22 @@ Then use `$brosettlement-api` to:
 The pending-intents request verifies API access, not that the local process is online. Local
 health alone is also insufficient. Do not proceed while Console shows **Offline**.
 
+When local `/health` is ready and Console reports **Online**, but the remote MPC key disappears,
+`keyId` is null, a previously ready chain reports `MPC_KEY_NOT_READY`, or DKG/signing behavior
+becomes incompatible after a restart, perform the Co-Signer version check in the onboarding
+reference before proposing MPC initialization, key replacement, or share changes. The check is
+read-only and does not require confirmation. If a newer official release or upstream revision is
+available, report the installed and available versions/commits and ask whether the user wants a
+controlled update. Never update, rebuild, restart, or reinitialize automatically.
+
+Treat update approval as permission to test the approved version, not permission to discard local
+changes or replace the working binary. If the candidate cannot read the existing encrypted-share
+format, keep the compatible Co-Signer running and follow the protected legacy-archive workflow in
+the reference. After the old MPC share and its matching recovery material are archived, keep the
+existing Ed25519 pair, Console API key and Key ID, shares-directory path, share-encryption key, and
+runtime configuration unchanged. Offer to create only a new MPC key. Explain the wallet-continuity
+impact and obtain the required confirmations before archiving active share files or initializing it.
+
 ### 8. Initialize MPC/DKG
 
 Explain that MPC initialization is an external state-changing operation and obtain any
@@ -345,8 +361,9 @@ After MPC readiness:
     instructions for the current required scopes, wait for confirmation, and obtain explicit
     authorization for the state-changing request.
 12. Reconcile completed tests with REST, optional WebSocket events, and ledger records.
-13. Report the existing credential and MPC-share locations as described below. Do not ask the
-    user for a backup destination and do not copy, move, archive, upload, or display any secret.
+13. Report the existing credential and MPC-share locations as described below. During normal
+    onboarding, do not ask for a backup destination or copy, move, archive, upload, or display any
+    secret. Use the protected archive exception only for an approved incompatible upgrade.
 
 ### Report secret locations and recovery requirements
 
@@ -391,10 +408,23 @@ replace or recover the MPC shares. Never initialize a replacement MPC key as a b
 - Do not treat local `ready: true` as end-to-end readiness. Also verify the Console heartbeat, MPC key status, and chain status.
 - Do not create a wallet before MPC is ready.
 - Do not change the API key, share-encryption key, or shares directory while DKG or signing is active.
+- During MPC readiness anomalies, compare the running Co-Signer with the official GitHub
+  repository before proposing a reset or reinitialization. Never call an untagged commit a release.
+- Do not update the Co-Signer without explicit approval. Preserve the existing API credentials,
+  runtime configuration, complete shares directory, and matching share-encryption key during an
+  approved update; updating the executable must not initialize a replacement MPC key.
+- Never run `git reset --hard`, `git clean`, discard a patch, overwrite modified files, or otherwise
+  remove local Co-Signer changes as part of an update. Use a separate candidate checkout when the
+  existing worktree is dirty.
+- When a candidate is incompatible with legacy shares, archive the old MPC share and matching
+  recovery material only after explicit approval. Reuse the existing Ed25519 pair, Console API
+  key, shares-directory path, share-encryption key, and runtime configuration; offer only a new
+  MPC key. Do not present it as a migration of old wallets.
 - Use testnet by default. Require explicit user authorization and verified production readiness before any mainnet operation.
 - Do not turn operational monitoring guidance into an onboarding checkpoint or follow-up question.
-- Do not ask for a backup directory or copy secrets during onboarding; report the existing absolute
-  paths and let the user choose and perform their own secure backup.
+- Do not ask for a backup directory or copy secrets during normal onboarding; report the existing
+  absolute paths and let the user perform their own secure backup. The only exception is the
+  explicitly approved protected legacy archive required for an incompatible Co-Signer upgrade.
 - Stop and explain the blocker when credentials, scopes, allowlists, plan limits, or readiness checks are incomplete.
 
 ## Completion report
@@ -406,6 +436,7 @@ At the end, report each checkpoint without exposing secrets or claiming optional
 - Co-Signer API key created with required MPC scopes;
 - integration API key and scopes used for ledger account and wallet creation;
 - Co-Signer installed and built;
+- Co-Signer running version and Git commit, plus the latest-version comparison when troubleshooting required it;
 - Co-Signer local health;
 - Console heartbeat;
 - MPC/DKG status;

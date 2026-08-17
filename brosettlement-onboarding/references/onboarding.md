@@ -161,6 +161,72 @@ Require:
   `$brosettlement-api`;
 - Co-Signer status **Online** in BroSettlement Console.
 
+### Co-Signer version check for readiness anomalies
+
+Run this read-only check when local health is ready and Console is **Online**, but the remote MPC
+key is missing, `keyId` is null, a previously ready chain returns `MPC_KEY_NOT_READY`, or DKG or
+signing becomes incompatible after a restart:
+
+1. Read the running version from local `/health` and record the repository commit with
+   `git -C <co-signer-repository> rev-parse HEAD`. Do not rely on the health version alone.
+2. Check only the official
+   [BroLabel/brosettlement-mpc-co-signer](https://github.com/BroLabel/brosettlement-mpc-co-signer)
+   repository. Prefer the latest GitHub Release, then the latest semantic-version tag.
+3. If the official repository has no releases or tags, compare the local commit with the remote
+   default branch. Describe a newer commit as a **newer upstream revision**, not as a release.
+4. If the installed build is current, say so and continue diagnosis without proposing an MPC reset.
+5. If a newer release, tag, or upstream revision exists, report the installed version/commit and
+   the available version/commit, link the official source, summarize relevant changes when they
+   are available, and ask whether the user wants to update. Do not update automatically.
+
+Treat explicit update approval as permission to prepare and test a candidate, not permission to
+discard local changes or replace the running binary. Inspect `git status` first. If the worktree is
+dirty, report the modified paths and leave them untouched; never use `git reset --hard`, `git
+clean`, checkout-overwrite, automatic stash, or patch deletion. Prepare the approved release, tag,
+or commit in a separate checkout or Git worktree. Run `go mod download`, `go test ./...`, and build
+a side-by-side candidate binary outside the active binary path.
+
+Before replacement, inspect the official changes for share-format migrations and compatibility.
+Never start an unverified candidate against the only live shares directory. If the candidate is
+compatible, stop the old process gracefully, atomically select the tested binary, start it with the
+same credentials and recovery material, and verify `/health`, commit, Console **Online**, pending
+intents, MPC key, and chain readiness. Keep a rollback binary until verification finishes.
+
+If the candidate reports that the existing encrypted-share format is incompatible and no official
+migration is available, keep or restore the old compatible process. Tell the user that a new MPC
+key is a replacement, not a migration, and may not preserve signing access to wallets created with
+the old MPC key. For production, mainnet, or any wallet containing assets, stop until BroSettlement
+provides an approved migration or recovery plan.
+
+For an explicitly approved staging/testnet reset, first create a timestamped protected legacy
+archive under the existing secrets root. Copy, without modifying the active files:
+
+- the complete old encrypted-shares directory;
+- its matching old share-encryption key;
+- the old Co-Signer Ed25519 private and public API-key pair;
+- the active runtime configuration or launcher needed to restore their paths;
+- the old working binary and a non-secret manifest containing its health version and Git commit.
+
+Set the archive directory to `700` and secret files to `600`. Verify locally that every expected
+file was copied and that the archived recovery material matches the originals; do not display
+secret contents or secret hashes. Report the archive's absolute path and contents by purpose. Do
+not revoke or replace the existing Console API key, Ed25519 pair, share-encryption key, runtime
+configuration, or shares-directory path.
+
+After the archive is verified, ask for explicit approval to remove only the archived legacy MPC
+share files from the active shares directory so the new Co-Signer can use that same directory.
+Keep the share-encryption key and every other credential unchanged. Do not touch unrelated files.
+Maintain a rollback plan that restores the archived share files and compatible binary if the new
+initialization does not complete.
+
+Then offer to initialize only a new MPC key. Before proposing it, use `$brosettlement-api` to
+confirm that the current server contract and organization state support replacement or new
+initialization. Obtain explicit confirmation and use the existing API key, Ed25519 pair,
+shares-directory path, share-encryption key, and runtime configuration. State that the new MPC key
+does not migrate old wallets. Recovery of an old wallet would require the archived legacy share,
+the matching unchanged share-encryption key, a compatible Co-Signer version, and corresponding
+server-side support; the local archive alone does not guarantee recovery.
+
 ## 5. Initialize MPC
 
 Confirm the Co-Signer is **Online**, then use `$brosettlement-api` to run the guarded,
@@ -235,10 +301,11 @@ Require all of the following before wallet creation:
 
 ## Storage, backup, and recovery
 
-At the end of onboarding, do not ask the user for another protected directory and do not copy,
-move, archive, or upload secrets. Read the resolved paths from the active configuration and report
-the exact absolute location, purpose, and recovery importance of each artifact that exists in a
-compact table:
+At the end of normal onboarding, do not ask the user for another protected directory and do not
+copy, move, archive, or upload secrets. The explicitly approved legacy archive for an incompatible
+upgrade is the only exception. Otherwise, read the resolved paths from the active configuration
+and report the exact absolute location, purpose, and recovery importance of each artifact that
+exists in a compact table:
 
 - Co-Signer Ed25519 private/public PEM files;
 - integration Ed25519 private/public PEM files, when a separate integration key was created;
@@ -263,5 +330,11 @@ share files, mix material between organizations, or initialize a replacement MPC
 5. Confirm all three MPC permissions.
 6. Review the network and allowlist settings shown on the API-key page.
 7. Confirm the API key is active.
-8. Confirm MPC was explicitly initialized.
-9. Review Co-Signer JSON logs without exposing secrets.
+8. For the readiness anomalies above, compare the running version and commit with the official
+   GitHub repository and offer a controlled update only when a newer build exists.
+9. Preserve local source changes and test any update in a separate candidate checkout.
+10. If the candidate cannot read legacy shares, keep the compatible runtime, archive the old MPC
+    share and matching recovery material after approval, preserve all existing credentials and
+    paths, and offer only a new MPC key with the continuity warning.
+11. Confirm MPC was explicitly initialized; do not reinitialize solely because remote readiness is missing.
+12. Review Co-Signer JSON logs without exposing secrets.
