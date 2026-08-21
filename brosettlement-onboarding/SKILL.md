@@ -167,9 +167,15 @@ Tell the user to perform these steps manually in BroSettlement Console:
    - **Read MPC**
    - **Raw MPC co-signer**
 7. Create the key.
-8. Return to the **API Keys** list, find the new `Testnet Co-Signer` key, and select **View**.
-9. On the key details page, locate **Key ID** and click the copy button beside it. Store the
-   copied **API Key ID** securely without exposing private key material.
+
+After the numbered creation steps, always show the following as its own visible paragraph with the
+heading **Where to find the API Key ID**. Do not compress it into the sentence about creating the
+key or leave it as a short numbered item:
+
+> After the key is created, return to **API Keys**, find `Testnet Co-Signer`, and select **View**.
+> On the key details page, find the **Key ID** field near the top and click the copy button on the
+> right side of that field. Use the value copied from **Key ID**—do not copy the identifier from
+> the browser URL. Store the copied API Key ID securely.
 
 Do not open or operate the Console for this checkpoint. Do not ask permission to do so. Ask the
 user to reply when the key is created and the API Key ID, all three permissions, all required
@@ -275,12 +281,13 @@ available to the running Co-Signer, while Share C is a client-controlled recover
 
 Show only the absolute artifact paths and purposes, never their contents. Require the user to make
 and verify a complete protected backup of Share C with the original share-encryption key and key
-ID. Ensure Share B has its own independent backup in a different trust domain. After explicit
-confirmation that Share C recovery custody is complete, instruct the user to stop the Co-Signer
-safely, remove the local Share C copy from the Co-Signer host without altering the backed-up
-artifact, restart, and verify that Share B signing remains ready. Do not copy or expose Share C
-yourself. Never leave both B and C on the active host, and never remove the local copy until the
-independent backup has been verified.
+ID. Ensure Share B has its own independent backup in a different trust domain. Use only a read-only
+filesystem existence check for the active-host Share C path. If the file is still present, say
+plainly that it was verified at that exact path, that keeping Share B and Share C on the active
+Co-Signer host is a critical security gap because together they form a signing quorum, and that
+the user must remove Share C from that host after verifying independent recovery custody. Do not
+ask for permission to stop or restart the Co-Signer, and never copy, move, rename, archive, upload,
+delete, or otherwise alter Share C. The agent must not perform the remediation itself.
 
 Explain that B+C form a client-controlled 2-of-3 recovery quorum that can sign without platform
 Share A or BroSettlement participation. For a native TRX or standard TRC-20 recovery transfer on
@@ -436,9 +443,10 @@ initialize a replacement MPC key as a backup procedure.
 - Do not treat local `ready: true` as end-to-end readiness. Also verify the Console heartbeat, MPC key status, and chain status.
 - Do not create a wallet before MPC is ready.
 - Do not change the API key, share-encryption key, or shares directory while DKG or signing is active.
-- After successful DKG, require verified independent custody for Share C and instruct the user to
-  remove its local artifact from the active Co-Signer host only after backup verification. Keep
-  only Share B available for normal signing.
+- After successful DKG, use only a read-only existence check for Share C. If it remains on the
+  active Co-Signer host, report its path, identify the critical signing-quorum security gap, and
+  tell the user to remove it themselves only after backup verification. Never stop or restart the
+  Co-Signer and never copy, move, rename, archive, upload, or delete Share C.
 - Never store, back up, transmit, or administer Share B and Share C together. Do not grant a third
   party access to either share or upload either artifact to chat, email, tickets, or shared drives.
 - Use `$brosettlement-disaster-recovery` only for its supported native TRX or standard TRC-20
@@ -476,8 +484,9 @@ At the end, report each checkpoint without exposing secrets or claiming optional
 - Co-Signer local health;
 - Console heartbeat;
 - MPC/DKG status;
-- Share B operational custody, verified separate Share C backup, and confirmation that Share C is
-  absent from the active Co-Signer host;
+- Share B operational custody, separate Share C backup status, and the read-only Share C presence
+  result. If Share C is still present, report the unresolved critical security gap without altering
+  the file;
 - chain readiness;
 - ledger account and wallet identifiers;
 - test transaction status;

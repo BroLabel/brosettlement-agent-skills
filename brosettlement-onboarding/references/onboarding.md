@@ -55,8 +55,8 @@ Follow these checkpoints in order:
 9. Co-Signer local health ready, raw Co-Signer API accessible, and Console status Online.
 10. MPC initialization explicitly started through the API skill and DKG completed.
 11. MPC key, Co-Signer, and testnet chain readiness verified through the API skill.
-12. Share C backup verified in independent client custody, Share C removed from the active
-    Co-Signer, and normal Share B readiness reverified.
+12. Share C backup status recorded and its active-host path checked read-only. If Share C remains,
+    the exact path and critical signing-quorum security gap are reported without changing files.
 13. Separate integration API key prepared with least-privilege account and wallet scopes.
 14. First ledger account and testnet wallet created and read back through the API skill.
 15. Existing credential, configuration, encryption-key, and encrypted-shares paths reported with
@@ -110,9 +110,17 @@ Give the user these manual BroSettlement Console instructions:
    - **Initialize MPC**
    - **Read MPC**
    - **Raw MPC co-signer**
-5. Create the key, return to the **API Keys** list, and select **View** for the new key.
-6. On the key details page, locate **Key ID**, click the copy button beside it, and store the
-   copied API Key ID securely.
+5. Create the key.
+
+Then render this as a separate, clearly visible paragraph rather than another compact numbered
+step:
+
+**Where to find the API Key ID**
+
+After the key is created, return to **API Keys**, find `Testnet Co-Signer`, and select **View**. On
+the key details page, find the **Key ID** field near the top and click the copy button on the right
+side of that field. Use the value copied from **Key ID**; do not copy the identifier from the
+browser address bar. Store the copied API Key ID securely.
 
 Stop and wait for the user to confirm completion. Do not open the authenticated Console, upload
 the public key, select permissions, submit the form, or retrieve the API Key ID for the user.
@@ -271,15 +279,18 @@ Complete this checkpoint before creating an integration key, ledger account, or 
    backup set, recovery medium, or administrative/security domain. Never give either share to a
    third party or place it in chat, email, a support ticket, or a shared drive. A person or system
    with both B and C controls a signing quorum.
-5. Ask the user to confirm only that the independent Share C backup has been completed and
-   verified; do not ask for its destination. Then instruct the user to stop the Co-Signer
-   gracefully, remove the local `.recovery.json` copy from the active host, leave the configured
-   recovery directory private and empty, and restart. Do not copy, move, display, upload, or
-   delete the user's recovery backup. Never remove the active-host copy before backup verification.
-6. After the user confirms the restart, verify local `/health`, Console **Online**, pending intents,
+5. Check only whether the exact active-host `.recovery.json` path exists; do not read its contents.
+   If it exists, state: **I verified that Share C is still present at `<absolute-path>`. This is a
+   critical security gap because Share B and Share C together form a signing quorum. After you
+   verify the independent Share C backup, you must remove this active-host copy yourself. I will
+   not delete or alter any file.** Do not ask whether the agent may stop or restart the Co-Signer.
+   Never copy, move, rename, archive, upload, delete, or otherwise alter the active-host Share C or
+   its recovery backup.
+6. Report the checkpoint as unresolved while Share C remains on the active host. If the user later
+   says they removed it, perform only another read-only existence check. When it is absent, report
+   that result and verify local `/health`, Console **Online**, pending intents,
    `brosettlement mpc status`, and normal Share B signing readiness. Share C being absent from the
-   active host after this checkpoint is expected and must not be treated as loss of normal signing
-   readiness.
+   active host is expected and must not be treated as loss of normal signing readiness.
 7. Explain disaster recovery accurately: Share B plus Share C form the client-controlled 2-of-3
    quorum and can sign without platform Share A or BroSettlement participation. For one native TRX
    or standard TRC-20 transfer on TRON Nile or mainnet, use only the sibling
@@ -288,8 +299,9 @@ Complete this checkpoint before creating an integration key, ledger account, or 
    other chains, arbitrary contract calls, or sign-only recovery. Do not generalize this narrow
    workflow into a turnkey recovery product for every wallet or asset.
 
-If a later DKG creates a new Share C, repeat this checkpoint for the new `keyId`. Do not proceed to
-wallet creation while B and C remain together on the active Co-Signer host.
+If a later DKG creates a new Share C, repeat this checkpoint for the new `keyId`. Do not claim that
+onboarding is securely complete while B and C remain together on the active Co-Signer host, but do
+not remediate the file on the user's behalf.
 
 ## 6. Create and test the first wallet
 
@@ -353,8 +365,9 @@ wallet creation while B and C remain together on the active Co-Signer host.
 ## Storage, backup, and recovery
 
 At the end of normal onboarding, do not ask the user for another protected directory and do not
-copy, move, archive, or upload secrets. The user-performed post-DKG Share C separation above and
-an explicitly approved legacy archive for an incompatible upgrade are the only exceptions.
+copy, move, archive, upload, or delete secrets. Share C separation is always user-performed; the
+agent only checks and reports its presence. An explicitly approved legacy archive for an
+incompatible upgrade is the only agent-managed archival exception.
 Otherwise, read the resolved paths from the active configuration
 and report the exact absolute location, purpose, and recovery importance of each artifact that
 exists in a compact table:
