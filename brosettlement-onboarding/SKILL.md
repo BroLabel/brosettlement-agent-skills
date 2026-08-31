@@ -1,6 +1,6 @@
 ---
 name: brosettlement-onboarding
-description: Run an interactive BroSettlement onboarding wizard from account access to a working testnet wallet, using the companion brosettlement-api skill for signed API operations and status verification. Use when a user wants step-by-step help creating or checking a BroSettlement account, choosing a Co-Signer installation folder, generating Ed25519 credentials, receiving manual Console instructions for user-created API keys, installing and starting the client-controlled Co-Signer, initializing MPC/DKG, verifying readiness, diagnosing Co-Signer version drift or MPC readiness anomalies, and creating the first ledger account and wallet.
+description: Run an interactive BroSettlement onboarding wizard from account access to a working wallet, using the companion brosettlement-api skill for signed API operations and status verification. Use when a user wants step-by-step help creating or checking a BroSettlement account, choosing a Co-Signer installation folder, generating Ed25519 credentials, receiving manual Console instructions for user-created API keys, installing and starting the client-controlled Co-Signer, initializing MPC/DKG, verifying readiness, diagnosing Co-Signer version drift or MPC readiness anomalies, and creating the first ledger account and wallet.
 ---
 
 # BroSettlement onboarding
@@ -60,6 +60,11 @@ Treat API key creation, editing, rotation, and revocation as user-only Console a
   wallet. Do not ask separate yes/no confirmation before either tutorial create. The standing
   authorization ends after those two resources are created, or immediately if the environment,
   payload purpose, or resource count changes.
+- Mainnet wallets and operations are supported during onboarding when the user explicitly selects
+  the mainnet network. They are outside the standing testnet tutorial authorization: show the
+  exact network, asset, destination, amount, fees, and state-changing action, verify production
+  readiness, and obtain explicit confirmation immediately before execution. Never state that
+  onboarding prohibits mainnet operations.
 - Do not front-load a technical mutation plan for the two tutorial creates unless the user asks
   for it. Use one short progress sentence, perform the operation, verify it, and teach from the
   actual result.
@@ -87,17 +92,18 @@ If the answer is no:
 
 If the answer is yes, confirm that the organization is visible and continue.
 
-Then ask only:
+Do not ask the user for a Console URL or environment selection. Set the onboarding API
+environment to production by default and continue directly to the installation-folder question.
+Use `https://brosettlement-api.brolabel.io/` for the Co-Signer and leave
+`BROSETTLEMENT_ENVIRONMENT` unset or set it to `production` for the CLI.
 
-> Please copy the link to the BroSettlement admin panel where you registered and can see your organization. Paste the full URL from your browser's address bar here.
-
-Translate this question into the user's language. Show `https://app.brolabel.io/` as the default
-production example. Mention `https://app-staging.brolabel.io/` only as the explicit staging
-alternative. Do not ask an abstract
-question such as "What BroSettlement Console URL do you use for [organization]?" If the copied
-URL contains a query string, session token, or other sensitive parameters, retain only the
-scheme and host. Use the admin-panel URL to determine the environment, but do not use the
-admin-panel URL itself as the API URL.
+Switch to staging only when the user explicitly says that their organization or environment is
+staging, or voluntarily provides a URL whose hostname is `app-staging.brolabel.io`. In that case,
+use `https://brosettlement-staging-api.brolabel.io/` and set
+`BROSETTLEMENT_ENVIRONMENT=staging`. A request for a testnet wallet, TRON Nile, or test assets does
+not by itself mean staging. Do not advertise staging, ask whether the user wants staging, or ask
+them to provide a URL. If the user voluntarily supplies a URL with query parameters or other
+sensitive data, use only its scheme and hostname and do not repeat the full URL.
 
 ### 2. Ask for the installation folder
 
@@ -140,9 +146,10 @@ Apply these platform rules before installation:
   production host.
 
 Do not confuse the BroSettlement API environment with the blockchain network or Co-Signer host
-support. Selecting the production API does not by itself authorize mainnet activity, and using
-macOS for onboarding against that API does not make macOS an officially supported production
-runtime.
+support. Selecting the production API does not itself choose testnet or mainnet. Onboarding may
+perform explicitly selected mainnet operations after the required confirmation and production
+readiness checks. Using macOS for onboarding against the production API does not make macOS an
+officially supported production/mainnet runtime.
 
 If a prerequisite is missing, explain it and help install or configure it before continuing.
 Do not silently install system packages.
@@ -224,17 +231,17 @@ Then:
    and Share C. Never place them under the same parent storage boundary in production.
 2. Generate one separate share-encryption key with `600` permissions and assign its stable
    non-secret key ID. Preserve both for the lifetime of the artifacts.
-3. Determine `CO_SIGNER_MONOLITH_URL` from the previously captured admin-panel environment:
-   - default to production when the admin-panel hostname is `app.brolabel.io`, and set
-     `CO_SIGNER_MONOLITH_URL` to `https://brosettlement-api.brolabel.io/`;
-   - if the admin-panel hostname is `app-staging.brolabel.io` or otherwise clearly identifies
-     staging, set it to `https://brosettlement-staging-api.brolabel.io/`;
+3. Configure the environment selected by the conversation rule above:
+   - use production by default and set `CO_SIGNER_MONOLITH_URL` to
+     `https://brosettlement-api.brolabel.io/`;
+   - switch to `https://brosettlement-staging-api.brolabel.io/` only when the user explicitly
+     identifies their environment as staging or voluntarily provides an
+     `app-staging.brolabel.io` URL;
    - do not ask the user what `CO_SIGNER_MONOLITH_URL` is;
    - do not use the admin-panel URL itself as `CO_SIGNER_MONOLITH_URL`;
    - configure the companion CLI with `BROSETTLEMENT_ENVIRONMENT=production` for production or
      `BROSETTLEMENT_ENVIRONMENT=staging` for staging. The CLI defaults to production when this
-     variable is absent;
-   - for any unknown hostname, stop and ask the user to verify the Console URL instead of guessing.
+     variable is absent.
 4. Configure the required environment variables.
 5. Keep secrets out of committed `.env` files, logs, command arguments, and chat.
 
@@ -295,7 +302,7 @@ Initialization completes only when:
 
 - the MPC key is **Active** or **Ready**;
 - the Co-Signer remains **Online**;
-- required testnet chains are **Ready**.
+- every chain selected for the onboarding flow is **Ready**.
 
 If DKG fails or expires, diagnose the terminal state before retrying. Do not create repeated
 initialization attempts blindly.
@@ -362,7 +369,7 @@ After MPC readiness:
 5. Pause until the user confirms the integration key is active, all four scopes are selected,
    and its matching credentials are available to `$brosettlement-api`. If the answer in step 1
    was **Yes**, obtain the same confirmation without generating another pair.
-6. Briefly say that the first testnet ledger account is being created. Use `$brosettlement-api`
+6. Briefly say that the first ledger account is being created. Use `$brosettlement-api`
    to inspect and call `POST /api/v1/ledger/accounts`. When the user did not choose tutorial
    names, use a clear default such as `Testnet Treasury` and generate a unique `externalId`; do
    not interrupt the flow merely to approve those harmless defaults. Pass the CLI's required
@@ -380,9 +387,11 @@ After MPC readiness:
    The same accounts are available in BroSettlement Console under **Accounts**. Continue to the
    wallet automatically; do not pause for another confirmation.
 8. Briefly say that a wallet is being created for the verified account. Use
-   `$brosettlement-api` to inspect and call `POST /api/v1/wallets` for a ready testnet chain such
-   as **TRON Nile**, using a stable idempotency key when the current contract requires one. Pass
-   `--confirm` under the same standing onboarding authorization without asking the user again.
+   `$brosettlement-api` to inspect and call `POST /api/v1/wallets`. Use a ready testnet chain such
+   as **TRON Nile** for the default tutorial. If the user explicitly requested a supported
+   mainnet chain, verify production readiness and obtain separate explicit confirmation for that
+   exact wallet creation before passing `--confirm`. Use a stable idempotency key when the current
+   contract requires one.
 9. Require a wallet ID from the response, verify it with `GET /api/v1/wallets/{walletId}`, and
    poll with reasonable backoff until it becomes **Active**. Then say explicitly **Wallet created
    successfully.** Show the sanitized create response and a compact summary of the fields
@@ -465,6 +474,9 @@ initialize a replacement MPC key as a backup procedure.
 - Never request, display, transmit, log, or commit private keys, share-encryption keys, or MPC share files.
 - Never operate BroSettlement Console to create, edit, rotate, or revoke an API key.
 - Never ask for authorization to manage an API key; provide instructions and wait for the user.
+- Never ask for a Console URL or environment selection during normal onboarding. Use production
+  by default and switch to staging only from the user's explicit staging statement or a
+  voluntarily supplied `app-staging.brolabel.io` URL. Do not infer staging from testnet usage.
 - Never implement or send a BroSettlement API request independently when the companion API skill is available.
 - Never upload the client private key or client MPC share to BroSettlement.
 - Do not invent Docker images, packages, environment variables, or deployment commands. Use the current official repository and Console setup instructions.
@@ -498,7 +510,9 @@ initialize a replacement MPC key as a backup procedure.
   recovery material only after explicit approval. Reuse the existing Ed25519 pair, Console API
   key, shares-directory path, share-encryption key, and runtime configuration; offer only a new
   MPC key. Do not present it as a migration of old wallets.
-- Use testnet by default. Require explicit user authorization and verified production readiness before any mainnet operation.
+- Never say that onboarding prohibits mainnet operations. Testnet is the no-funds tutorial
+  default; an explicitly selected mainnet flow is allowed after production-readiness checks and
+  confirmation of each state-changing mainnet action.
 - Do not turn operational monitoring guidance into an onboarding checkpoint or follow-up question.
 - Do not ask for a backup directory or copy secrets during normal onboarding; report the existing
   absolute paths and let the user perform their own secure backup. The only exception is the

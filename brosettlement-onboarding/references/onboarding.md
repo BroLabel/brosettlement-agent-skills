@@ -24,7 +24,7 @@ Required API checkpoints:
 | Co-Signer configured | `brosettlement api GET /api/v1/co-signer/intents/pending` | Raw Co-Signer API access; this does not prove local process health |
 | Before initialization | `brosettlement mpc status` | Current key and chain state recorded |
 | Initialize MPC | `brosettlement mpc initialize --idempotency-key <stable-key> --confirm` | Accepted idempotent initialization request after explicit confirmation |
-| DKG monitoring | `brosettlement mpc status` | MPC key and required testnet chains reach ready states |
+| DKG monitoring | `brosettlement mpc status` | MPC key and every chain selected for onboarding reach ready states |
 | Ledger account | Separate integration key: `POST /api/v1/ledger/accounts`, then `GET /api/v1/ledger/accounts/{accountId}` | Key has `accounts:create` and `accounts:read`; created resource is readable |
 | Wallet | Separate integration key: `POST /api/v1/wallets`, then `GET /api/v1/wallets/{walletId}` | Key also has `wallets:create` and `wallets:read`; wallet reaches `ACTIVE` |
 
@@ -43,7 +43,7 @@ action.
 Follow these checkpoints in order:
 
 1. BroSettlement account and organization visible in Console.
-2. Admin-panel URL copied from the browser page where the user registered and can see the organization.
+2. Production API environment selected by default, or staging selected only from explicit user-provided context.
 3. Explicit Co-Signer installation folder selected.
 4. Host prerequisites confirmed.
 5. Dedicated Ed25519 key pair generated without overwriting existing keys, with the complete
@@ -54,11 +54,11 @@ Follow these checkpoints in order:
    key ID protected.
 9. Co-Signer local health ready, raw Co-Signer API accessible, and Console status Online.
 10. MPC initialization explicitly started through the API skill and DKG completed.
-11. MPC key, Co-Signer, and testnet chain readiness verified through the API skill.
+11. MPC key, Co-Signer, and selected-chain readiness verified through the API skill.
 12. Share C backup status recorded and its active-host path checked read-only. If Share C remains,
     the exact path and critical signing-quorum security gap are reported without changing files.
 13. Separate integration API key prepared with least-privilege account and wallet scopes.
-14. First ledger account and testnet wallet created and read back through the API skill.
+14. First ledger account and selected-network wallet created and read back through the API skill.
 15. Existing credential, configuration, encryption-key, and encrypted-shares paths reported with
     their purposes and recovery requirements; no backup destination requested and no files copied.
 
@@ -66,23 +66,26 @@ Pause at any incomplete checkpoint. Ask only for the information required to res
 After checkpoint 15 and the completion report, stop. Do not offer or schedule recurring
 Co-Signer monitoring, periodic health checks, background alerts, reminders, or automations.
 
-After account access is confirmed, ask the user to copy the full URL from the browser address
-bar of the BroSettlement admin panel where they registered and can see their organization. Do
-not phrase this as "What Console URL do you use for [organization]?" Use that URL to identify
-the environment. Present `https://app.brolabel.io/` as the default production choice and
-`https://app-staging.brolabel.io/` as the explicit staging alternative. Map them automatically:
+After account access is confirmed, do not ask for a Console URL and do not present an environment
+choice. Select production automatically. Switch to staging only when the user explicitly says
+their organization/environment is staging or voluntarily supplies an
+`app-staging.brolabel.io` URL. A testnet wallet, TRON Nile, or test-asset request does not imply
+staging. Do not mention staging unless the user has supplied that context.
 
 | Console hostname | Environment | `CO_SIGNER_MONOLITH_URL` | CLI selection |
 |---|---|---|---|
 | `app.brolabel.io` | production (default) | `https://brosettlement-api.brolabel.io/` | `BROSETTLEMENT_ENVIRONMENT=production` or unset |
-| `app-staging.brolabel.io` | staging | `https://brosettlement-staging-api.brolabel.io/` | `BROSETTLEMENT_ENVIRONMENT=staging` |
+| `app-staging.brolabel.io` when user-supplied | staging | `https://brosettlement-staging-api.brolabel.io/` | `BROSETTLEMENT_ENVIRONMENT=staging` |
 
 Never ask the user for the exact `CO_SIGNER_MONOLITH_URL`, and never use the admin-panel URL
-itself as the API URL. Stop on any unknown hostname rather than inventing a mapping.
+itself as the API URL. If the user voluntarily provides another hostname, do not infer a custom
+API endpoint from it; retain production unless the user explicitly identifies the environment as
+staging. If a supplied URL contains a query string or sensitive parameters, retain only its
+scheme and hostname and do not echo the full value.
 
 ## Prerequisites
 
-- BroSettlement organization on the Free/Testnet plan.
+- BroSettlement organization with access to the networks required for the selected onboarding flow.
 - A supported Linux or macOS host with outbound HTTPS access, subject to the platform rules below.
 - Git, Go 1.24 or later, and OpenSSL.
 - Protected storage for the API private key, share-encryption key, and encrypted MPC shares.
@@ -106,8 +109,10 @@ itself as the API URL. Stop on any unknown hostname rather than inventing a mapp
   shared mount. Prefer a dedicated Linux VM or server for production.
 
 The API environment, blockchain network, and Co-Signer host are separate decisions. The
-production API can still be used for an explicitly selected testnet onboarding flow, while any
-mainnet action continues to require explicit authorization and a production-ready Linux host.
+production API can serve either a testnet onboarding flow or an explicitly selected mainnet flow.
+Do not state that onboarding forbids mainnet operations. Before a mainnet mutation, require a
+production-ready Linux host, verify the selected chain is ready, show the exact operation details,
+and obtain explicit user confirmation.
 
 ## 1. Generate the Ed25519 key pair
 
@@ -283,7 +288,7 @@ Require all of the following before wallet creation:
 
 - MPC key: **Active** or **Ready**;
 - Co-Signer: **Online**;
-- selected testnet chain: **Ready**.
+- selected chain: **Ready**.
 
 ### Post-DKG Share B / Share C custody checkpoint
 
@@ -350,7 +355,11 @@ not remediate the file on the user's behalf.
 5. Treat the user's request to complete onboarding as authorization for exactly one staging/testnet
    ledger account and one linked staging/testnet wallet. Do not ask separate confirmations for
    these two tutorial resources and do not show a verbose mutation plan unless requested. The CLI
-   may still receive its required `--confirm` flag under this standing authorization.
+   may still receive its required `--confirm` flag under this standing authorization. Mainnet is
+   supported but is not covered by this standing authorization: if the user explicitly selects a
+   mainnet chain, show the exact network and mutation details, verify production readiness, and
+   obtain explicit confirmation immediately before each state-changing mainnet operation. Never
+   describe mainnet as prohibited by onboarding.
 6. Create the ledger account through `$brosettlement-api`, require its returned ID, and read it
    back by ID. Only then state that creation succeeded, show the sanitized response and returned
    fields, and explain that all accounts can be listed with:
@@ -360,10 +369,11 @@ not remediate the file on the user's behalf.
    ```
 
    The same resources are visible in Console under **Accounts**.
-7. Create a wallet linked to that account on a ready testnet chain such as TRON Nile, require its
-   returned ID, read it back, and poll until it becomes **Active**. State success explicitly and
-   show the sanitized response plus returned wallet ID, account ID, network, public address,
-   status, and timestamps when those fields are present. List wallets later with:
+7. Create a wallet linked to that account. Use a ready testnet chain such as TRON Nile for the
+   default tutorial, or the supported mainnet chain explicitly selected and confirmed by the
+   user. Require its returned ID, read it back, and poll until it becomes **Active**. State success
+   explicitly and show the sanitized response plus returned wallet ID, account ID, network,
+   public address, status, and timestamps when those fields are present. List wallets later with:
 
    ```text
    @brosettlement api GET '/api/v1/wallets'
