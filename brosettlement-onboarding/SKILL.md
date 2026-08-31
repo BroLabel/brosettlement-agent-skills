@@ -121,6 +121,29 @@ Before changing files:
 Check the selected host for Git, Go 1.24 or later, OpenSSL, outbound HTTPS access, a protected
 secrets location, and enough access to create the installation directory.
 
+Apply these platform rules before installation:
+
+- **Linux:** use Linux for the officially supported production/mainnet Co-Signer runtime. Keep
+  the active shares, lock files, and secrets on one local writable Linux filesystem; do not use
+  NFS, another shared filesystem, or an active-active replica topology.
+- **macOS:** the Co-Signer can build and run natively, including immutable share publication. Use
+  it for local development, verification, onboarding, and testnet flows. It may connect to the
+  production BroSettlement API for an explicitly selected testnet/onboarding flow, but the
+  current official production/mainnet operating runbook remains Linux-only.
+- **Windows:** native Windows is not supported. The current Co-Signer does not compile or provide
+  the required atomic share-publication and process-locking guarantees on Windows. Do not attempt
+  a native Windows installation or weaken those safeguards.
+- **Windows with WSL2 or a Linux VM:** offer this only as a Linux-hosted alternative, not as native
+  Windows support. Keep the repository, active shares, locks, and secrets inside the Linux
+  filesystem (for example, the WSL2 ext4 filesystem), never under `/mnt/c`, a Windows network
+  drive, or another shared mount. A dedicated Linux VM or server remains the recommended
+  production host.
+
+Do not confuse the BroSettlement API environment with the blockchain network or Co-Signer host
+support. Selecting the production API does not by itself authorize mainnet activity, and using
+macOS for onboarding against that API does not make macOS an officially supported production
+runtime.
+
 If a prerequisite is missing, explain it and help install or configure it before continuing.
 Do not silently install system packages.
 
@@ -445,6 +468,12 @@ initialize a replacement MPC key as a backup procedure.
 - Never implement or send a BroSettlement API request independently when the companion API skill is available.
 - Never upload the client private key or client MPC share to BroSettlement.
 - Do not invent Docker images, packages, environment variables, or deployment commands. Use the current official repository and Console setup instructions.
+- Never claim native Windows support or bypass unsupported filesystem publication, locking, or
+  durability checks. On Windows, use only a properly configured WSL2/Linux VM path as a Linux
+  environment, with all operational files kept off Windows-mounted filesystems.
+- Do not tell a macOS user that the production API is unavailable. Explain that API environment,
+  blockchain network, and supported production host are separate choices; Linux remains the
+  official production/mainnet Co-Signer runtime.
 - Do not treat local `ready: true` as end-to-end readiness. Also verify the Console heartbeat, MPC key status, and chain status.
 - Do not create a wallet before MPC is ready.
 - Do not change the API key, share-encryption key, or shares directory while DKG or signing is active.

@@ -83,9 +83,31 @@ itself as the API URL. Stop on any unknown hostname rather than inventing a mapp
 ## Prerequisites
 
 - BroSettlement organization on the Free/Testnet plan.
-- Linux or macOS host with outbound HTTPS access.
+- A supported Linux or macOS host with outbound HTTPS access, subject to the platform rules below.
 - Git, Go 1.24 or later, and OpenSSL.
 - Protected storage for the API private key, share-encryption key, and encrypted MPC shares.
+
+### Co-Signer platform support
+
+- **Linux:** the officially supported production/mainnet runtime. Run exactly one Co-Signer
+  replica with active shares and lock files on one local writable Linux filesystem. Do not use
+  NFS, shared storage, or active-active replicas.
+- **macOS:** supported for native local builds, immutable share publication, development,
+  verification, onboarding, and testnet operation. A macOS host may use the production
+  BroSettlement API when the selected onboarding/testnet environment requires it, but the
+  current official production/mainnet operating runbook remains Linux-only.
+- **Native Windows:** unsupported. The current source does not compile into a safe native Windows
+  Co-Signer and does not implement the required atomic share-publication and lifetime-locking
+  behavior there. Do not attempt to bypass those checks or describe native Windows as supported.
+- **WSL2 or a Linux VM on Windows:** may be used as a Linux environment for onboarding/testing
+  when all preflight checks pass. Store the repository, shares, lock files, encryption key, API
+  private key, and runtime configuration inside the Linux filesystem, such as WSL2's ext4 volume.
+  Never place operational Co-Signer state under `/mnt/c`, on a Windows network drive, or on another
+  shared mount. Prefer a dedicated Linux VM or server for production.
+
+The API environment, blockchain network, and Co-Signer host are separate decisions. The
+production API can still be used for an explicitly selected testnet onboarding flow, while any
+mainnet action continues to require explicit authorization and a production-ready Linux host.
 
 ## 1. Generate the Ed25519 key pair
 
