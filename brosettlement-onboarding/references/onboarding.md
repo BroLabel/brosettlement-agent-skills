@@ -28,8 +28,8 @@ Required API checkpoints:
 | Ledger account | Separate integration key: `POST /api/v1/ledger/accounts`, then `GET /api/v1/ledger/accounts/{accountId}` | Key has `accounts:create` and `accounts:read`; created resource is readable |
 | Wallet | Separate integration key: `POST /api/v1/wallets`, then `GET /api/v1/wallets/{walletId}` | Key also has `wallets:create` and `wallets:read`; wallet reaches `ACTIVE` |
 
-Fetch the current staging Swagger before each state-changing operation. Treat exact fields,
-scopes, enums, and errors from Swagger as authoritative.
+Fetch the current Swagger for the selected environment before each state-changing operation.
+Treat exact fields, scopes, enums, and errors from Swagger as authoritative.
 
 ## API key creation is user-only
 
@@ -69,10 +69,16 @@ Co-Signer monitoring, periodic health checks, background alerts, reminders, or a
 After account access is confirmed, ask the user to copy the full URL from the browser address
 bar of the BroSettlement admin panel where they registered and can see their organization. Do
 not phrase this as "What Console URL do you use for [organization]?" Use that URL to identify
-the environment. For `app-staging.brolabel.io` or another unambiguous staging admin hostname,
-set `CO_SIGNER_MONOLITH_URL` to `https://brosettlement-staging-api.brolabel.io/` automatically.
+the environment. Present `https://app.brolabel.io/` as the default production choice and
+`https://app-staging.brolabel.io/` as the explicit staging alternative. Map them automatically:
+
+| Console hostname | Environment | `CO_SIGNER_MONOLITH_URL` | CLI selection |
+|---|---|---|---|
+| `app.brolabel.io` | production (default) | `https://brosettlement-api.brolabel.io/` | `BROSETTLEMENT_ENVIRONMENT=production` or unset |
+| `app-staging.brolabel.io` | staging | `https://brosettlement-staging-api.brolabel.io/` | `BROSETTLEMENT_ENVIRONMENT=staging` |
+
 Never ask the user for the exact `CO_SIGNER_MONOLITH_URL`, and never use the admin-panel URL
-itself as the API URL. For unknown or production environments, stop rather than inventing a URL.
+itself as the API URL. Stop on any unknown hostname rather than inventing a mapping.
 
 ## Prerequisites
 
@@ -144,7 +150,7 @@ Required runtime variables:
 
 | Variable | Purpose |
 |---|---|
-| `CO_SIGNER_MONOLITH_URL` | BroSettlement API URL. For staging, use `https://brosettlement-staging-api.brolabel.io/`. |
+| `CO_SIGNER_MONOLITH_URL` | BroSettlement API URL. Production (default): `https://brosettlement-api.brolabel.io/`. Staging: `https://brosettlement-staging-api.brolabel.io/`. |
 | `CO_SIGNER_API_KEY_ID` | Dedicated Co-Signer API key UUID. |
 | `CO_SIGNER_API_PRIVATE_KEY` | Client-held Ed25519 private key. |
 | `CO_SIGNER_SHARE_ENCRYPTION_KEY` | Separate secret used to encrypt MPC shares. |

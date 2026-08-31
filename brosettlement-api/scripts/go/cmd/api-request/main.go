@@ -14,7 +14,7 @@ import (
 	"github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/broauth"
 )
 
-const defaultBaseURL = "https://brosettlement-staging-api.brolabel.io"
+const defaultBaseURL = "https://brosettlement-api.brolabel.io"
 
 type output struct {
 	StatusCode int         `json:"statusCode"`

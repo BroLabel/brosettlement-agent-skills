@@ -14,8 +14,6 @@ import (
 	"github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/broauth"
 )
 
-const defaultBaseURL = "https://brosettlement-staging-api.brolabel.io"
-
 var newHTTPClient = func(timeout time.Duration) *http.Client {
 	return &http.Client{Timeout: timeout}
 }
@@ -45,10 +43,14 @@ func runAPI(args []string, stdout, stderr io.Writer) error {
 	if len(args) < 2 {
 		return errorsForAPIUsage()
 	}
+	environment, err := selectedEnvironment()
+	if err != nil {
+		return err
+	}
 	options := apiOptions{method: strings.ToUpper(args[0]), target: args[1]}
 	flags := flag.NewFlagSet("api", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&options.baseURL, "base-url", defaultBaseURL, "BroSettlement API base URL")
+	flags.StringVar(&options.baseURL, "base-url", environment.apiBaseURL, "BroSettlement API base URL")
 	flags.StringVar(&options.bodyFile, "body-file", "", "File containing exact request body bytes")
 	flags.StringVar(&options.idempotencyKey, "idempotency-key", "", "Stable logical-operation key")
 	flags.DurationVar(&options.timeout, "timeout", 30*time.Second, "HTTP timeout")
@@ -67,27 +69,31 @@ func runMPC(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stdout, "Usage: brosettlement mpc status | brosettlement mpc initialize --confirm [--idempotency-key KEY]")
 		return errHelp
 	}
+	environment, err := selectedEnvironment()
+	if err != nil {
+		return err
+	}
 	switch strings.ToLower(args[0]) {
 	case "status":
 		if len(args) != 1 {
 			return fmt.Errorf("mpc status does not accept additional arguments")
 		}
 		return executeAPI(apiOptions{
-			baseURL: defaultBaseURL,
+			baseURL: environment.apiBaseURL,
 			method:  http.MethodGet,
 			target:  "/api/v1/mpc/status",
 			timeout: 30 * time.Second,
 		}, stdout)
 	case "initialize":
 		options := apiOptions{
-			baseURL: defaultBaseURL,
+			baseURL: environment.apiBaseURL,
 			method:  http.MethodPost,
 			target:  "/api/v1/mpc/initialize",
 			timeout: 30 * time.Second,
 		}
 		flags := flag.NewFlagSet("mpc initialize", flag.ContinueOnError)
 		flags.SetOutput(stderr)
-		flags.StringVar(&options.baseURL, "base-url", defaultBaseURL, "BroSettlement API base URL")
+		flags.StringVar(&options.baseURL, "base-url", environment.apiBaseURL, "BroSettlement API base URL")
 		flags.StringVar(&options.idempotencyKey, "idempotency-key", "", "Stable logical-operation key")
 		flags.DurationVar(&options.timeout, "timeout", 30*time.Second, "HTTP timeout")
 		flags.BoolVar(&options.confirmed, "confirm", false, "Confirm MPC initialization")
@@ -105,7 +111,11 @@ func runMPC(args []string, stdout, stderr io.Writer) error {
 
 func executeAPI(options apiOptions, stdout io.Writer) error {
 	if options.baseURL == "" {
-		options.baseURL = defaultBaseURL
+		environment, err := selectedEnvironment()
+		if err != nil {
+			return err
+		}
+		options.baseURL = environment.apiBaseURL
 	}
 	if options.timeout == 0 {
 		options.timeout = 30 * time.Second

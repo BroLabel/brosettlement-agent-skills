@@ -163,10 +163,12 @@ Run the complete local verification:
 make check
 ```
 
-The current integration contract is available in the
-[staging Swagger UI](https://brosettlement-staging-api.brolabel.io/swagger-integration#/).
-Fetch the live contract before changing endpoints, schemas, scopes, signing rules, or error
-handling.
+The default production integration contract is available in the
+[production Swagger UI](https://brosettlement-api.brolabel.io/swagger-integration). Set
+`BROSETTLEMENT_ENVIRONMENT=staging` to use the separate
+[staging contract](https://brosettlement-staging-api.brolabel.io/swagger-integration#/).
+Fetch the selected live contract before changing endpoints, schemas, scopes, signing rules, or
+error handling.
 
 ## Security
 

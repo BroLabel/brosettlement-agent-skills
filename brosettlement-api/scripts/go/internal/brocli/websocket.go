@@ -17,8 +17,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const defaultWebSocketURL = "wss://brosettlement-staging-api.brolabel.io/v1/ws"
-
 func runWebSocket(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(stdout, "Usage: brosettlement websocket listen [--log-path FILE] [--stop-after DURATION]")
@@ -27,9 +25,13 @@ func runWebSocket(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || strings.ToLower(args[0]) != "listen" {
 		return fmt.Errorf("usage: brosettlement websocket listen [options]")
 	}
+	environment, err := selectedEnvironment()
+	if err != nil {
+		return err
+	}
 	flags := flag.NewFlagSet("websocket listen", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	wsURL := flags.String("ws-url", defaultWebSocketURL, "BroSettlement WebSocket URL")
+	wsURL := flags.String("ws-url", environment.webSocketURL, "BroSettlement WebSocket URL")
 	logPath := flags.String("log-path", "brosettlement_ws_listener.log", "JSONL log path")
 	reconnectDelay := flags.Duration("reconnect-delay", 5*time.Second, "Reconnect delay")
 	stopAfter := flags.Duration("stop-after", 0, "Optional smoke-test duration")

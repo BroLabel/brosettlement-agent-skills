@@ -2,18 +2,22 @@
 
 ## Current source of truth
 
-- Swagger UI: https://brosettlement-staging-api.brolabel.io/swagger-integration#/
-- OpenAPI: https://brosettlement-staging-api.brolabel.io/swagger-integration-json
+- Production Swagger UI: https://brosettlement-api.brolabel.io/swagger-integration
+- Production OpenAPI: https://brosettlement-api.brolabel.io/swagger-integration-json
+- Staging Swagger UI: https://brosettlement-staging-api.brolabel.io/swagger-integration#/
+- Staging OpenAPI: https://brosettlement-staging-api.brolabel.io/swagger-integration-json
 - API title: `BroSettlement Integration API`
 - API version: `1.0`
+- Production base URL (default): `https://brosettlement-api.brolabel.io`
 - Staging base URL: `https://brosettlement-staging-api.brolabel.io`
 - REST prefix: `/api/v1`
-- Snapshot verified: 2026-08-13
+- Production endpoint and OpenAPI metadata verified: 2026-08-31
 
-Both links are staging. The production URL is intentionally not defined yet and must be updated by
-the skill owner when it becomes available. Fetch the OpenAPI document whenever current fields,
-commands, enums, required scopes, body-hash rules, idempotency rules, or error schemas matter.
-Treat this file as workflow guidance, not a replacement for the schema.
+The CLI defaults to production. Set `BROSETTLEMENT_ENVIRONMENT=staging` only for the staging
+environment. Fetch the selected environment's OpenAPI document whenever current fields, commands,
+enums, required scopes, body-hash rules, idempotency rules, or error schemas matter. Treat this
+file as workflow guidance, not a replacement for the schema. Never combine one environment's
+credentials with another environment's endpoints.
 
 ## REST authentication
 
@@ -152,6 +156,7 @@ The signed tools read:
 
 - `BROSETTLEMENT_API_KEY_ID`
 - `BROSETTLEMENT_API_PRIVATE_KEY_FILE`
+- `BROSETTLEMENT_ENVIRONMENT` (`production` by default; set `staging` explicitly when needed)
 
 Keep the private key file outside the skill and source repository.
 

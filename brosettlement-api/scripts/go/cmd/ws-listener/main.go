@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const defaultWebSocketURL = "wss://brosettlement-staging-api.brolabel.io/v1/ws"
+const defaultWebSocketURL = "wss://brosettlement-api.brolabel.io/v1/ws"
 
 func main() {
 	wsURL := flag.String("ws-url", defaultWebSocketURL, "BroSettlement WebSocket URL")

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const usage = `BroSettlement Integration API CLI (staging by default)
+const usage = `BroSettlement Integration API CLI (production by default)
 
 Usage:
   brosettlement version [--json]
@@ -22,6 +22,9 @@ Usage:
 Credentials:
   BROSETTLEMENT_API_KEY_ID
   BROSETTLEMENT_API_PRIVATE_KEY_FILE
+
+Environment:
+  BROSETTLEMENT_ENVIRONMENT=production|staging (default: production)
 
 Run "brosettlement <command> --help" for command options.
 `

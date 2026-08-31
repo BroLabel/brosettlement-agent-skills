@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-const defaultSwaggerJSON = "https://brosettlement-staging-api.brolabel.io/swagger-integration-json"
-
 var httpMethods = map[string]bool{
 	"delete": true, "get": true, "head": true, "options": true,
 	"patch": true, "post": true, "put": true,
@@ -42,6 +40,10 @@ type command struct {
 }
 
 func runCommands(args []string, stdout, stderr io.Writer) error {
+	environment, err := selectedEnvironment()
+	if err != nil {
+		return err
+	}
 	queryParts := make([]string, 0)
 	flagArgs := make([]string, 0)
 	for _, arg := range args {
@@ -53,7 +55,7 @@ func runCommands(args []string, stdout, stderr io.Writer) error {
 	}
 	flags := flag.NewFlagSet("commands", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	specURL := flags.String("swagger-json", defaultSwaggerJSON, "Swagger/OpenAPI JSON URL")
+	specURL := flags.String("swagger-json", environment.swaggerJSON, "Swagger/OpenAPI JSON URL")
 	asJSON := flags.Bool("json", false, "Print JSON")
 	timeout := flags.Duration("timeout", 30*time.Second, "HTTP timeout")
 	if err := flags.Parse(flagArgs); err != nil {

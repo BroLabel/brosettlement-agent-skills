@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const defaultSwaggerJSON = "https://brosettlement-staging-api.brolabel.io/swagger-integration-json"
+const defaultSwaggerJSON = "https://brosettlement-api.brolabel.io/swagger-integration-json"
 
 var httpMethods = map[string]bool{
 	"delete":  true,

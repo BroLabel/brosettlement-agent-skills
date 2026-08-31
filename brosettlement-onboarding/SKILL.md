@@ -91,8 +91,9 @@ Then ask only:
 
 > Please copy the link to the BroSettlement admin panel where you registered and can see your organization. Paste the full URL from your browser's address bar here.
 
-Translate this question into the user's language. If helpful, show
-`https://app-staging.brolabel.io/` as an example, not as an assumed URL. Do not ask an abstract
+Translate this question into the user's language. Show `https://app.brolabel.io/` as the default
+production example. Mention `https://app-staging.brolabel.io/` only as the explicit staging
+alternative. Do not ask an abstract
 question such as "What BroSettlement Console URL do you use for [organization]?" If the copied
 URL contains a query string, session token, or other sensitive parameters, retain only the
 scheme and host. Use the admin-panel URL to determine the environment, but do not use the
@@ -201,12 +202,16 @@ Then:
 2. Generate one separate share-encryption key with `600` permissions and assign its stable
    non-secret key ID. Preserve both for the lifetime of the artifacts.
 3. Determine `CO_SIGNER_MONOLITH_URL` from the previously captured admin-panel environment:
+   - default to production when the admin-panel hostname is `app.brolabel.io`, and set
+     `CO_SIGNER_MONOLITH_URL` to `https://brosettlement-api.brolabel.io/`;
    - if the admin-panel hostname is `app-staging.brolabel.io` or otherwise clearly identifies
      staging, set it to `https://brosettlement-staging-api.brolabel.io/`;
    - do not ask the user what `CO_SIGNER_MONOLITH_URL` is;
    - do not use the admin-panel URL itself as `CO_SIGNER_MONOLITH_URL`;
-   - for an unknown or production environment, do not guess a mapping. Explain that the
-     production API URL is not configured in this skill and stop before starting the Co-Signer.
+   - configure the companion CLI with `BROSETTLEMENT_ENVIRONMENT=production` for production or
+     `BROSETTLEMENT_ENVIRONMENT=staging` for staging. The CLI defaults to production when this
+     variable is absent;
+   - for any unknown hostname, stop and ask the user to verify the Console URL instead of guessing.
 4. Configure the required environment variables.
 5. Keep secrets out of committed `.env` files, logs, command arguments, and chat.
 

@@ -1,18 +1,21 @@
 ---
 name: brosettlement-api
-description: Build, inspect, test, and troubleshoot BroSettlement Integration API clients from the current staging Swagger contract. Use when a user asks what API commands are available, needs endpoint or schema details, wants a signed REST request, needs the WebSocket event listener, implements idempotent wallet or transaction operations, or diagnoses BroSettlement API authentication and response errors.
+description: Build, inspect, test, and troubleshoot BroSettlement Integration API clients from the current production or staging Swagger contract. Use when a user asks what API commands are available, needs endpoint or schema details, wants a signed REST request, needs the WebSocket event listener, implements idempotent wallet or transaction operations, or diagnoses BroSettlement API authentication and response errors.
 ---
 
 # BroSettlement API
 
-Use the current Swagger as the source of truth:
+Use the current Swagger for the selected environment as the source of truth. Production is the
+default:
 
-- Swagger UI: https://brosettlement-staging-api.brolabel.io/swagger-integration#/
-- Swagger JSON: https://brosettlement-staging-api.brolabel.io/swagger-integration-json
+- Production Swagger UI: https://brosettlement-api.brolabel.io/swagger-integration
+- Production Swagger JSON: https://brosettlement-api.brolabel.io/swagger-integration-json
+- Staging Swagger UI: https://brosettlement-staging-api.brolabel.io/swagger-integration#/
+- Staging Swagger JSON: https://brosettlement-staging-api.brolabel.io/swagger-integration-json
 
-These URLs are **staging only**. Do not describe them as production and do not invent a production
-URL. Continue using staging until the skill owner replaces the links with confirmed production
-URLs.
+Use production unless the user explicitly selects staging or the calling onboarding skill derives
+staging from `app-staging.brolabel.io`. Never mix credentials, Swagger, REST, or WebSocket endpoints
+between environments.
 
 Read [references/api.md](references/api.md) before designing or changing an integration.
 
@@ -34,14 +37,16 @@ show only the public key, and give the user manual Console instructions. Wait un
 confirms that key creation, scopes, allowlist, and active status are complete.
 
 Load existing credentials at runtime through `BROSETTLEMENT_API_KEY_ID` and
-`BROSETTLEMENT_API_PRIVATE_KEY_FILE`. Do not copy credential values into source files, prompts,
-generated examples, or shell history.
+`BROSETTLEMENT_API_PRIVATE_KEY_FILE`. Select endpoints with
+`BROSETTLEMENT_ENVIRONMENT=production|staging`; an unset value means production. Do not copy
+credential values into source files, prompts, generated examples, or shell history.
 
 ## Workflow
 
 1. Prepare the bundled CLI and run its automatic version gate as described below. This may update
    only the compiled CLI executable; never update `SKILL.md`, references, scripts, or sibling skills.
-2. Default to staging and state that explicitly.
+2. Default to production and state that explicitly. Use staging only when it was explicitly
+   selected or derived from the staging Console hostname.
 3. Fetch the current Swagger JSON before answering endpoint, command, field, enum, scope, or error-schema questions.
 4. Identify the exact operation, request schema, response schema, required scope, authentication headers, body-hash requirement, and idempotency requirement.
 5. Resolve credentials through the credential protocol and verify prerequisites without printing secrets.
@@ -80,8 +85,8 @@ For REST, use exactly six newline-separated fields:
 
 If the bundled Go client cannot be used, implement these same invariants in the user's language
 and verify a fixed timestamp/nonce test vector locally before any live mutation. Do not copy a
-signing algorithm from another skill or document unless it matches the current staging Swagger
-and the current operation-specific requirements in this skill.
+signing algorithm from another skill or document unless it matches the selected environment's
+current Swagger and the current operation-specific requirements in this skill.
 
 ## Use the bundled CLI
 
@@ -180,7 +185,8 @@ narrow standing authorization defined by the calling skill. The onboarding excep
 one staging/testnet ledger account and one linked staging/testnet wallet; it does not remove the
 CLI safeguard or authorize any other mutation.
 
-For staging `POST /api/v1/mpc/initialize`, follow the current operation contract exactly:
+For `POST /api/v1/mpc/initialize`, follow the current selected-environment operation contract
+exactly. The verified production and staging contracts currently require:
 
 - send the exact two-byte JSON body `{}` with `Content-Type: application/json`;
 - set `X-Api-Body-Hash` and the canonical `BODY_HASH` line to
@@ -248,7 +254,9 @@ URL because its query contains authentication material.
 - Never request a password, JWT, TOTP code, or authenticated Console session to manage API keys.
 - Never create, edit, rotate, or revoke API keys for the user; API-key management is user-only.
 - Never log canonical strings when they may contain sensitive query parameters.
-- Treat staging and mainnet as distinct targets. Use staging unless the user explicitly authorizes a mainnet operation.
+- Treat production and staging as distinct API environments, and testnet and mainnet as distinct
+  blockchain targets. Production is the default API environment, but mainnet activity still
+  requires explicit authorization.
 - Treat create, withdrawal, MPC initialization, and signing actions as state-changing. Confirm the intended resource and environment before executing them.
 - Do not retry a mutation with a new idempotency key after an unknown outcome until the existing outcome has been checked.
 - Do not claim success from an HTTP request alone; verify the resulting resource or terminal lifecycle status.

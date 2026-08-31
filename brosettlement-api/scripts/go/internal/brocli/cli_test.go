@@ -27,6 +27,45 @@ func TestRunHelp(t *testing.T) {
 	if !strings.Contains(stdout.String(), "brosettlement update [--auto]") {
 		t.Fatalf("help does not describe CLI updates: %s", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "production by default") ||
+		!strings.Contains(stdout.String(), "BROSETTLEMENT_ENVIRONMENT=production|staging") {
+		t.Fatalf("help does not describe environment selection: %s", stdout.String())
+	}
+}
+
+func TestSelectedEnvironmentDefaultsToProduction(t *testing.T) {
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "")
+	environment, err := selectedEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if environment.name != "production" ||
+		environment.apiBaseURL != "https://brosettlement-api.brolabel.io" ||
+		environment.swaggerJSON != "https://brosettlement-api.brolabel.io/swagger-integration-json" ||
+		environment.webSocketURL != "wss://brosettlement-api.brolabel.io/v1/ws" {
+		t.Fatalf("unexpected production endpoints: %#v", environment)
+	}
+}
+
+func TestSelectedEnvironmentSupportsExplicitStaging(t *testing.T) {
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "staging")
+	environment, err := selectedEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if environment.name != "staging" ||
+		environment.apiBaseURL != "https://brosettlement-staging-api.brolabel.io" ||
+		environment.swaggerJSON != "https://brosettlement-staging-api.brolabel.io/swagger-integration-json" ||
+		environment.webSocketURL != "wss://brosettlement-staging-api.brolabel.io/v1/ws" {
+		t.Fatalf("unexpected staging endpoints: %#v", environment)
+	}
+}
+
+func TestSelectedEnvironmentRejectsUnknownValue(t *testing.T) {
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "sandbox")
+	if _, err := selectedEnvironment(); err == nil {
+		t.Fatal("expected unsupported environment error")
+	}
 }
 
 func TestAPIMutationRequiresConfirmationBeforeCredentials(t *testing.T) {
