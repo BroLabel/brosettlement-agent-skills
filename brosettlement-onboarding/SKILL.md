@@ -115,6 +115,14 @@ Require an explicit folder path. Resolve it to an absolute path before making ch
 `<selected-folder>/brosettlement-mpc-co-signer` as the repository directory unless the selected
 folder is already the repository directory.
 
+Treat this as the local installation root, not an API path. Before accepting a path for a
+production Linux deployment, require an absolute path with no whitespace, control characters, or
+shell metacharacters. Prefer conventional service paths such as `/opt/brosettlement/co-signer`
+for the application, `/var/lib/brosettlement/co-signer` for mutable state, and
+`/etc/brosettlement/co-signer` for protected configuration. Do not create, move, or rename an
+existing installation merely to adopt these examples; explain the conflict and ask the user to
+choose the production paths.
+
 Before changing files:
 
 - inspect whether the folder or repository already exists;
@@ -256,6 +264,20 @@ secrets. Verify:
 - local `ready` is `true`;
 - DKG and signing capabilities are enabled;
 - Console reports the Co-Signer as **Online**.
+
+Launch safely:
+
+- pass the executable and arguments as separate values and set the process working directory
+  explicitly; never concatenate paths into a command string or pass the launch through `sh -c`;
+- when the available execution tool accepts only a shell string, apply correct shell quoting to
+  every path and value, and keep secret values out of the command line;
+- use the production service manager described by the official Co-Signer runbook for a durable
+  deployment, with fixed binary, working-directory, configuration, and state paths;
+- before retrying a failed start, verify that no Co-Signer process was created and no external
+  state changed;
+- if parsing or quoting fails, report the exact non-secret path, identify whether it is the
+  binary, working directory, configuration, private-key file, or shares directory, and explain
+  the corrected invocation. Never report only "a path with spaces."
 
 Then use `$brosettlement-api` to:
 
@@ -517,6 +539,10 @@ initialize a replacement MPC key as a backup procedure.
 - Do not ask for a backup directory or copy secrets during normal onboarding; report the existing
   absolute paths and let the user perform their own secure backup. The only exception is the
   explicitly approved protected legacy archive required for an incompatible Co-Signer upgrade.
+- For a production Linux deployment, reject installation, configuration, secret, and state paths
+  containing whitespace, control characters, or shell metacharacters before startup. Regardless
+  of the path, never construct the Co-Signer launch by interpolating it into an unquoted shell
+  command.
 - Stop and explain the blocker when credentials, scopes, allowlists, plan limits, or readiness checks are incomplete.
 
 ## Completion report

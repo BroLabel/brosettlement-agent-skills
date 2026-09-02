@@ -196,6 +196,33 @@ The two shares directories must be absolute, distinct, and non-overlapping. Do n
 minimum time required to complete DKG and separate Share C. Inject secrets through a service
 manager or secret-management platform. Do not commit a populated `.env` file.
 
+### Production path and launch safety
+
+The installation path is a local filesystem location for the Co-Signer repository and binary; it
+is not a BroSettlement API URL. For a production Linux deployment, resolve and validate all paths
+before writing files or starting the process:
+
+- application and binary: prefer `/opt/brosettlement/co-signer`;
+- mutable state and shares: prefer a protected subtree of `/var/lib/brosettlement/co-signer`;
+- protected configuration and key-file references: prefer a protected subtree of
+  `/etc/brosettlement/co-signer`.
+
+Require production paths to be absolute and free of whitespace, control characters, and shell
+metacharacters. These examples are recommendations, not permission to move or overwrite an
+existing installation. If a selected production path fails validation, explain why and ask the
+user to choose a safe path before continuing.
+
+Start the executable with a process API that passes an argument vector and explicit working
+directory. Do not create one interpolated command string and do not use `sh -c`. If the available
+tool exposes only a shell command string, shell-quote every path and non-secret value correctly;
+never put secret values on the command line. A durable production deployment must use the service
+manager and topology from the official Co-Signer runbook.
+
+If a start fails because of path parsing, first verify that no process started and no external
+state changed. Report the exact non-secret path and its role—binary, working directory,
+configuration, private-key file, or shares directory—then explain the corrected invocation. A
+message that says only "a path with spaces" is insufficient.
+
 ## 4. Verify health and connectivity
 
 ```bash
@@ -432,18 +459,19 @@ replacement MPC key as a backup.
 
 ## Troubleshooting order
 
-1. Validate required environment variables and Ed25519 key format.
-2. Validate shares-directory ownership and permissions.
-3. Validate the environment-derived API URL and outbound HTTPS access.
-4. Confirm private and registered public keys match.
-5. Confirm all three MPC permissions.
-6. Review the network and allowlist settings shown on the API-key page.
-7. Confirm the API key is active.
-8. For the readiness anomalies above, compare the running version and commit with the official
+1. Validate every resolved path and the launcher's argument/quoting behavior.
+2. Validate required environment variables and Ed25519 key format.
+3. Validate shares-directory ownership and permissions.
+4. Validate the environment-derived API URL and outbound HTTPS access.
+5. Confirm private and registered public keys match.
+6. Confirm all three MPC permissions.
+7. Review the network and allowlist settings shown on the API-key page.
+8. Confirm the API key is active.
+9. For the readiness anomalies above, compare the running version and commit with the official
    GitHub repository and offer a controlled update only when a newer build exists.
-9. Preserve local source changes and test any update in a separate candidate checkout.
-10. If the candidate cannot read legacy shares, keep the compatible runtime, archive the old MPC
+10. Preserve local source changes and test any update in a separate candidate checkout.
+11. If the candidate cannot read legacy shares, keep the compatible runtime, archive the old MPC
     share and matching recovery material after approval, preserve all existing credentials and
     paths, and offer only a new MPC key with the continuity warning.
-11. Confirm MPC was explicitly initialized; do not reinitialize solely because remote readiness is missing.
-12. Review Co-Signer JSON logs without exposing secrets.
+12. Confirm MPC was explicitly initialized; do not reinitialize solely because remote readiness is missing.
+13. Review Co-Signer JSON logs without exposing secrets.
