@@ -95,6 +95,57 @@ func TestUpdateCheckDoesNotReplaceExecutable(t *testing.T) {
 	}
 }
 
+func TestUpdateAutoDoesNotDowngradeNewerDevelopmentBuild(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "brosettlement")
+	if err := os.WriteFile(target, []byte("newer-source-cli"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client := newReleaseClient("cli-v1.0.1", []byte("older-release-cli"), false)
+	configureUpdaterTest(t, client, target)
+	Version = "1.0.2-dev"
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"update", "--auto"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("Run returned %d: %s", code, stderr.String())
+	}
+	current, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != "newer-source-cli" {
+		t.Fatalf("older release replaced newer development build: %q", current)
+	}
+	if !strings.Contains(stdout.String(), "1.0.2-dev is up to date") {
+		t.Fatalf("unexpected output: %s", stdout.String())
+	}
+}
+
+func TestDevelopmentVersionUpdateOrdering(t *testing.T) {
+	tests := []struct {
+		name    string
+		latest  string
+		current string
+		want    bool
+	}{
+		{name: "older release does not replace newer source", latest: "1.0.1", current: "1.0.2-dev", want: false},
+		{name: "matching stable release replaces development build", latest: "1.0.2", current: "1.0.2-dev", want: true},
+		{name: "newer release replaces development build", latest: "1.0.3", current: "1.0.2-dev", want: true},
+		{name: "unversioned development build accepts release", latest: "1.0.1", current: "dev", want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := isNewerVersion(test.latest, test.current)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Fatalf("isNewerVersion(%q, %q) = %v, want %v", test.latest, test.current, got, test.want)
+			}
+		})
+	}
+}
+
 func configureUpdaterTest(t *testing.T, client *http.Client, executable string) {
 	t.Helper()
 	previousURL := releaseAPIURL

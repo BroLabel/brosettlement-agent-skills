@@ -19,6 +19,14 @@ enums, required scopes, body-hash rules, idempotency rules, or error schemas mat
 file as workflow guidance, not a replacement for the schema. Never combine one environment's
 credentials with another environment's endpoints.
 
+Within one top-level user turn, fetch that complete OpenAPI document once and reuse it for every
+operation. When `$brosettlement-onboarding` is the caller, reuse the same selected-environment
+document for the continuous onboarding session. Refresh only after an environment change, an
+explicit refresh request, or a server response that demonstrates contract drift; do not fetch once
+per endpoint. If the exact target is unknown, the reduced `commands` lister may perform one
+separate discovery fetch before the single full-document fetch. Skip discovery when the target is
+already known.
+
 ## REST authentication
 
 Required headers:
@@ -141,7 +149,7 @@ Run from `scripts/go`:
 | `go run ./cmd/brosettlement api METHOD TARGET [options]` | Sign and send an exact REST request; mutations require `--confirm`. |
 | `go run ./cmd/brosettlement mpc status` | Read the current MPC and chain readiness status. |
 | `go run ./cmd/brosettlement mpc initialize --confirm [options]` | Send the verified staging-compatible idempotent initialization request. |
-| `go run ./cmd/brosettlement websocket listen [options]` | Sign the WebSocket handshake, reconnect, and record events as JSONL. |
+| `go run ./cmd/brosettlement websocket listen --stop-after 30s [options]` | Run a bounded synchronous listener, reconnect as needed, and record events as JSONL. |
 
 Build a reusable binary after creating `./bin`:
 
@@ -160,20 +168,35 @@ The signed tools read:
 
 Keep the private key file outside the skill and source repository.
 
+The CLI version gate, selected-environment OpenAPI fetch, and read-only authentication probe are
+session prerequisites, not per-operation prerequisites. Run each once per top-level user turn and
+reuse it. During a continuous onboarding session, reuse each successful result for the same API
+environment and API key across the account create, account read-back, wallet create, and wallet
+read-back. Repeat only when its inputs change or a relevant server error invalidates it.
+
+WebSocket checks stop after `30s` by default. For synchronous checks, keep that default or pass an
+explicit `--stop-after` of no more than `2m`. Pass `--follow` only when the user explicitly requests
+an unbounded listener and it runs as a separately managed background process rather than blocking
+the current turn.
+
 ## Controlled test ladder
 
-1. Fetch the current integration OpenAPI document.
+1. Fetch the current integration OpenAPI document once for the selected environment and reuse it
+   for this turn or continuous onboarding session.
 2. Select the operation and record method, exact target, required scope, body schema, success
    response, body-hash rule, and idempotency rule.
 3. Confirm API Key ID, local private-key file path, scope, and completion of the required
    settings shown on the API-key page without displaying secrets or asking for the user's IP.
-4. Run an applicable read-only probe to validate the signature, timestamp, nonce, key status,
-   and allowlist before the first mutation.
+4. Run one applicable read-only probe to validate the signature, timestamp, nonce, key status,
+   and allowlist before the first mutation. Reuse it for the same key and API environment unless a
+   relevant configuration change or server error invalidates it.
 5. Show a redacted mutation plan and obtain confirmation, unless a calling skill has already
    captured explicit standing authorization for the exact operation. The onboarding tutorial may
-   use this only for one staging/testnet ledger account and one linked staging/testnet wallet;
-   keep the plan concise and never extend this exception to MPC initialization, withdrawal,
-   signing, production/mainnet activity, destructive actions, or additional resources.
+   use this for one ledger account and one linked **testnet blockchain wallet** against either the
+   production or staging API environment. Pass the CLI's `--confirm` flag under that authorization
+   without another question. Keep the plan concise and never extend this exception to MPC
+   initialization, withdrawal, signing, a mainnet blockchain wallet or operation, destructive
+   actions, or additional resources. Using the production API does not itself mean mainnet.
 6. Send the mutation once with a stable idempotency key.
 7. Verify the resulting resource or lifecycle through REST and relevant WebSocket events. Return
    the sanitized API response and identifiers, and claim success only after read-back succeeds.

@@ -28,8 +28,13 @@ Required API checkpoints:
 | Ledger account | Separate integration key: `POST /api/v1/ledger/accounts`, then `GET /api/v1/ledger/accounts/{accountId}` | Key has `accounts:create` and `accounts:read`; created resource is readable |
 | Wallet | Separate integration key: `POST /api/v1/wallets`, then `GET /api/v1/wallets/{walletId}` | Key also has `wallets:create` and `wallets:read`; wallet reaches `ACTIVE` |
 
-Fetch the current Swagger for the selected environment before each state-changing operation.
-Treat exact fields, scopes, enums, and errors from Swagger as authoritative.
+Run the companion CLI update gate exactly once before the first API operation in an onboarding
+session; never repeat that environment-independent gate during the session. Fetch the current
+Swagger once for the selected environment before the first state-changing operation, then reuse
+that verified executable and contract for the linked account and wallet flow. Refetch only when the
+environment changes or the server reports a contract/schema mismatch. Treat exact fields, scopes,
+enums, and errors from Swagger as authoritative. Run one read-only authentication probe per API key
+and environment in the session and reuse its result until the key, environment, or access changes.
 
 ## API key creation is user-only
 
@@ -65,6 +70,35 @@ Follow these checkpoints in order:
 Pause at any incomplete checkpoint. Ask only for the information required to resolve that checkpoint.
 After checkpoint 15 and the completion report, stop. Do not offer or schedule recurring
 Co-Signer monitoring, periodic health checks, background alerts, reminders, or automations.
+
+### Existing-installation and routine-operation fast path
+
+Do not restart at checkpoint 1 merely because this skill is activated again. When the user requests
+a routine ledger-account or wallet operation, first inspect the resolved installation and approved
+runtime configuration read-only. Reuse an already established API environment, integration API Key
+ID reference and matching private-key path, successful authentication probe, Co-Signer/MPC
+readiness, and ledger-account selection when those facts are unambiguous. Continue from the first
+missing prerequisite or route a purely post-onboarding API operation directly through
+`$brosettlement-api`.
+
+Ask the account-access question, installation-folder question, and other setup questions only for a
+new onboarding or when the corresponding fact cannot be recovered safely. Never infer a credential
+value, account selection, or blockchain network from ambiguous state. Existing security gates for
+user-only Console actions, MPC initialization, blockchain-mainnet mutations, withdrawals, and
+destructive actions still apply.
+
+For a new onboarding, the user's request to complete onboarding or create the first testnet wallet
+authorizes the linked tutorial ledger-account and wallet pair defined below. For a routine
+post-onboarding request, an explicit instruction to create one specific testnet ledger account or
+wallet authorizes only that exact resource; pass `--confirm` without asking the same yes/no question
+again. Do not extend routine authorization to another linked resource, a different network, or a
+mainnet mutation.
+
+For a routine wallet request, resolve and use the existing ledger account; never create another
+account. Require only the current Swagger scopes for the requested operation rather than the full
+onboarding scope set. After returning the sanitized result, ID, status, verification outcome, and
+retrieval commands, stop. Do not offer deposit/withdrawal tests or replay backup and completion
+checkpoints unless the user asked to resume onboarding.
 
 After account access is confirmed, do not ask for a Console URL and do not present an environment
 choice. Select production automatically. Switch to staging only when the user explicitly says
@@ -309,7 +343,12 @@ server-side support; the local archive alone does not guarantee recovery.
 Confirm the Co-Signer is **Online**, then use `$brosettlement-api` to run the guarded,
 idempotent `brosettlement mpc initialize --idempotency-key <stable-key> --confirm`. Add
 `--confirm` only after explicit user confirmation. Keep the Co-Signer online and poll with
-`brosettlement mpc status` through the companion skill until DKG finishes.
+`brosettlement mpc status` through the companion skill after `2s`, `5s`, `10s`, `15s`, and `30s`,
+then at most every `30s` within a strict three-minute interactive observation window. Bound each
+request timeout to the remaining window. If DKG is still non-terminal at the deadline, report
+**initialization accepted; verification pending**, show the current non-secret status and key ID
+when available, and return `@brosettlement mpc status` instead of waiting longer or retrying
+initialization.
 
 Require all of the following before wallet creation:
 
@@ -365,29 +404,52 @@ not remediate the file on the user's behalf.
 
 ## 6. Create and test the first wallet
 
-1. Ask whether the user already has a separate integration API key and matching local private key
-   with exactly `accounts:read`, `accounts:create`, `wallets:read`, and `wallets:create`. Keep the long-running
+1. Before asking about credentials, inspect the approved runtime environment and resolved local
+   configuration read-only for an integration API Key ID reference and matching private-key file
+   path. Check only presence, file type, and permissions; never display the ID or private key. When
+   those references exist, do not ask whether the user has a key; verify it with the session's
+   single authentication probe in step 6. A full onboarding key must have exactly `accounts:read`,
+   `accounts:create`, `wallets:read`, and `wallets:create`; a routine fast-path request needs only
+   the scopes required for that operation by the cached current Swagger. Keep the long-running
    Co-Signer key limited to its three MPC scopes.
-2. If the answer is **No**, ask permission to generate a new, separate Ed25519 pair in a resolved
-   protected directory. Generate it only after confirmation, use distinct integration filenames,
-   and never reuse or overwrite the Co-Signer pair.
+2. If no usable integration credentials are found, resolve distinct integration-key filenames in
+   the protected secrets directory already approved for this onboarding. An explicit request to
+   complete onboarding authorizes generating the separate Ed25519 pair without another yes/no only
+   when that directory is already approved, both files are absent, and nothing will be overwritten
+   or displaced. Ask only when the path is missing or ambiguous, a target file collides, an existing
+   key may need replacement, or multiple credentials require a user choice. Never reuse or
+   overwrite the Co-Signer pair.
 3. Show the complete integration public key in a fenced `pem` block. Tell the user to copy it into
-   **Public key (PEM)** and manually create an integration API key with exactly **Read ledger
-   accounts** (`accounts:read`), **Create ledger accounts** (`accounts:create`), **Read wallets &
-   assets** (`wallets:read`), and **Create wallets** (`wallets:create`). Never show the private key
-   or operate the Console. After creation, tell the user to return to **API Keys**, select **View**
-   for the new integration key, and click the copy button beside **Key ID** on its details page.
-4. Wait until the user confirms the key is active and its matching credentials are available to
-   `$brosettlement-api` through the approved runtime environment.
-5. Treat the user's request to complete onboarding as authorization for exactly one staging/testnet
-   ledger account and one linked staging/testnet wallet. Do not ask separate confirmations for
-   these two tutorial resources and do not show a verbose mutation plan unless requested. The CLI
-   may still receive its required `--confirm` flag under this standing authorization. Mainnet is
-   supported but is not covered by this standing authorization: if the user explicitly selects a
-   mainnet chain, show the exact network and mutation details, verify production readiness, and
-   obtain explicit confirmation immediately before each state-changing mainnet operation. Never
-   describe mainnet as prohibited by onboarding.
-6. Create the ledger account through `$brosettlement-api`, require its returned ID, and read it
+   **Public key (PEM)** and manually create an integration API key. For a new full onboarding,
+   select exactly **Read ledger accounts** (`accounts:read`), **Create ledger accounts**
+   (`accounts:create`), **Read wallets & assets** (`wallets:read`), and **Create wallets**
+   (`wallets:create`). For a routine fast-path request, select only the scopes required for the
+   requested operation by the cached current Swagger; do not request `accounts:create` merely to
+   create a wallet for an existing account. Never show the private key or operate the Console.
+   After creation, tell the user to return to **API Keys**, select **View** for the new integration
+   key, and click the copy button beside **Key ID** on its details page.
+4. When a new Console key was required, wait until the user confirms it is active, the scopes
+   required for the current full-onboarding or routine flow are selected, and its matching
+   credentials are available to `$brosettlement-api` through the approved runtime environment.
+   This user-only Console gate is mandatory. Do not ask for the same confirmation when reused
+   credentials have already passed the read-only probe.
+5. Treat the user's request to complete onboarding or create the first testnet wallet as standing
+   authorization for exactly one ledger account and one linked wallet on a testnet blockchain
+   network, whether the BroSettlement API environment is production or staging. Do not ask separate
+   confirmations for these two tutorial resources and do not show a verbose mutation plan unless
+   requested. The CLI still receives its required `--confirm` flag under this authorization. Merely
+   using the production API is not a mainnet action. If the user explicitly selects a mainnet
+   blockchain network, show the exact network and mutation details, verify production readiness,
+   and obtain explicit confirmation immediately before each state-changing mainnet operation.
+6. Run one read-only authentication probe for the integration key and reuse that result for both
+   creates. Run the CLI update gate once before the first API operation in this session and fetch
+   Swagger once for the selected environment before the first create. Reuse the executable,
+   contract, and probe for the wallet. Never repeat the environment-independent CLI gate during
+   this session. Refetch Swagger only if the environment changes or the server reports a
+   contract/schema mismatch; repeat the authentication probe only if the key, environment, or
+   relevant access configuration changes.
+7. For a new full onboarding, create the ledger account through `$brosettlement-api`, require its
+   returned ID, and read it
    back by ID. Only then state that creation succeeded, show the sanitized response and returned
    fields, and explain that all accounts can be listed with:
 
@@ -395,11 +457,15 @@ not remediate the file on the user's behalf.
    @brosettlement api GET '/api/v1/ledger/accounts'
    ```
 
-   The same resources are visible in Console under **Accounts**.
-7. Create a wallet linked to that account. Use a ready testnet chain such as TRON Nile for the
+   The same resources are visible in Console under **Accounts**. During a routine wallet fast path,
+   skip this account-create step and use the resolved existing ledger account.
+8. Create a wallet linked to that account. Use a ready testnet chain such as TRON Nile for the
    default tutorial, or the supported mainnet chain explicitly selected and confirmed by the
-   user. Require its returned ID, read it back, and poll until it becomes **Active**. State success
-   explicitly and show the sanitized response plus returned wallet ID, account ID, network,
+   user. Require its returned ID and read it back immediately. If it is not yet **Active**, poll
+   after `2s`, `5s`, `10s`, `15s`, and `30s`, then use only the remaining time before a strict
+   90-second wall-clock activation deadline for at most one final check. Bound each request timeout
+   to the remaining deadline and never poll past 90 seconds. When it becomes **Active**, state
+   success explicitly and show the sanitized response plus returned wallet ID, account ID, network,
    public address, status, and timestamps when those fields are present. List wallets later with:
 
    ```text
@@ -407,8 +473,12 @@ not remediate the file on the user's behalf.
    @brosettlement api GET '/api/v1/ledger/accounts/<accountId>/wallets'
    ```
 
-   Wallets are also visible in Console under **Wallets**. Never claim success when read-back or
-   lifecycle verification is incomplete; return the sanitized response and explain what remains.
+   Wallets are also visible in Console under **Wallets**. If it is still non-terminal at the
+   deadline, report **verification pending**, the sanitized create response, wallet ID, last status,
+   and both retrieval commands, then return control to the user. If read-back fails or a terminal
+   failure appears, report **verification incomplete**. Never claim success while verification is
+   pending or incomplete, and never start an unbounded WebSocket listener synchronously while
+   waiting.
 9. If the user wants to test a TRON Nile deposit, confirm the selected asset is returned by
    `GET /api/v1/assets`, then show the public deposit address and these resources:
    - [TRON Nile faucet](https://nileex.io/join/getJoinPage);
@@ -420,9 +490,15 @@ not remediate the file on the user's behalf.
 11. Record the balance and ledger state before the transfer. The user then requests the supported
     asset from a faucet or sends it from an external testnet wallet and confirms broadcast. A
     public transaction hash is helpful but optional.
-12. Poll balances and ledger entries through `$brosettlement-api`. If the integration key has
-    `transactions:read`, reconcile the deposit transaction; `websockets:read` may optionally
-    supplement polling. Never call `POST /api/v1/transactions` to create a deposit.
+12. Poll balances and ledger entries through `$brosettlement-api` after `5s`, `10s`, `15s`, and
+    `30s`, then at most every `30s` within a strict two-minute observation window after broadcast
+    is confirmed. If the integration key has `transactions:read`, reconcile the deposit
+    transaction; `websockets:read` may optionally supplement polling only with an explicit finite
+    `--stop-after`. Never run an unbounded listener synchronously or let it extend the current
+    operation's deadline. If no final balance delta and ledger entry appear by the deadline, report
+    **deposit verification pending**, include the public transaction hash when supplied, and return
+    the wallet and ledger retrieval commands instead of waiting longer. Never call
+    `POST /api/v1/transactions` to create a deposit.
 13. Offer a small withdrawal as a separate, explicitly confirmed operation, only after the user
     has manually added the current required scopes to a suitable integration key.
 14. Confirm the ledger and transaction lifecycle match the on-chain result.

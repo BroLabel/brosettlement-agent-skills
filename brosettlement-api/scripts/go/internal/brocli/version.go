@@ -8,9 +8,11 @@ import (
 	"runtime"
 )
 
-// Version and Commit are injected into release builds with -ldflags.
+// Version and Commit are injected into release builds with -ldflags. Keep the
+// development version aligned with the next release so the updater never
+// replaces newer source code with an older published binary.
 var (
-	Version = "dev"
+	Version = "1.0.2-dev"
 	Commit  = "unknown"
 )
 

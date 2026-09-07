@@ -17,7 +17,7 @@ Usage:
   brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]
   brosettlement mpc status
   brosettlement mpc initialize --confirm [--idempotency-key KEY]
-  brosettlement websocket listen [--log-path FILE] [--stop-after DURATION]
+  brosettlement websocket listen [--log-path FILE] [--stop-after DURATION | --follow]
 
 Credentials:
   BROSETTLEMENT_API_KEY_ID
@@ -25,6 +25,10 @@ Credentials:
 
 Environment:
   BROSETTLEMENT_ENVIRONMENT=production|staging (default: production)
+
+Safety:
+  Mutations require --confirm and automatic HTTP transport replay is disabled.
+  WebSocket listeners stop after 30s by default; --follow is explicitly unbounded.
 
 Run "brosettlement <command> --help" for command options.
 `

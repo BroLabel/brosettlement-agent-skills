@@ -31,6 +31,13 @@ func TestRunHelp(t *testing.T) {
 		!strings.Contains(stdout.String(), "BROSETTLEMENT_ENVIRONMENT=production|staging") {
 		t.Fatalf("help does not describe environment selection: %s", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "automatic HTTP transport replay is disabled") {
+		t.Fatalf("help does not describe single-attempt mutation behavior: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "stop after 30s by default") ||
+		!strings.Contains(stdout.String(), "--follow is explicitly unbounded") {
+		t.Fatalf("help does not describe bounded WebSocket behavior: %s", stdout.String())
+	}
 }
 
 func TestSelectedEnvironmentDefaultsToProduction(t *testing.T) {
@@ -80,6 +87,144 @@ func TestAPIMutationRequiresConfirmationBeforeCredentials(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "BROSETTLEMENT_API_KEY_ID") {
 		t.Fatalf("credentials were accessed before confirmation: %s", stderr.String())
+	}
+}
+
+func TestWalletMutationUsesProductionAndDoesNotRetry(t *testing.T) {
+	configureTestCredentials(t)
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "")
+	bodyPath := filepath.Join(t.TempDir(), "wallet.json")
+	if err := os.WriteFile(bodyPath, []byte(`{"accountId":"account-test","network":"TRON_NILE"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	requestCount := 0
+	var requestURL, idempotencyKey, requestBody string
+	var requestBodyPresent, transportReplayDisabled bool
+	useRoundTripper(t, func(request *http.Request) (*http.Response, error) {
+		requestCount++
+		requestURL = request.URL.String()
+		idempotencyKey = request.Header.Get("X-Idempotency-Key")
+		requestBodyPresent = request.Body != nil && request.Body != http.NoBody
+		transportReplayDisabled = request.GetBody == nil
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		requestBody = string(body)
+		return &http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"code":"TEMPORARY_UNAVAILABLE"}`)),
+		}, nil
+	})
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"api", "POST", "/api/v1/wallets",
+		"--body-file", bodyPath,
+		"--confirm",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run returned %d, want 1 for HTTP 503", code)
+	}
+	if requestCount != 1 {
+		t.Fatalf("wallet mutation sent %d requests, want exactly 1", requestCount)
+	}
+	if requestURL != "https://brosettlement-api.brolabel.io/api/v1/wallets" {
+		t.Fatalf("wallet mutation used %q, want production API", requestURL)
+	}
+	if requestBody != `{"accountId":"account-test","network":"TRON_NILE"}` {
+		t.Fatalf("wallet mutation changed request body: %q", requestBody)
+	}
+	if !strings.HasPrefix(idempotencyKey, "req-") {
+		t.Fatalf("wallet mutation missing generated idempotency key: %q", idempotencyKey)
+	}
+	if !requestBodyPresent {
+		t.Fatal("wallet mutation request body is absent")
+	}
+	if !transportReplayDisabled {
+		t.Fatal("wallet mutation allows automatic HTTP transport replay: GetBody is non-nil")
+	}
+}
+
+func TestWebSocketOptionsDefaultToBoundedThirtySeconds(t *testing.T) {
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "")
+	environment, err := selectedEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	options, err := parseWebSocketOptions(nil, environment, &stderr)
+	if err != nil {
+		t.Fatalf("parseWebSocketOptions returned error: %v", err)
+	}
+	if options.follow {
+		t.Fatal("default WebSocket options unexpectedly enable unbounded follow mode")
+	}
+	if options.stopAfter != 30*time.Second {
+		t.Fatalf("default WebSocket stop-after is %s, want 30s", options.stopAfter)
+	}
+}
+
+func TestWebSocketFollowIsExplicitAndMutuallyExclusiveWithStopAfter(t *testing.T) {
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "")
+	environment, err := selectedEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	options, err := parseWebSocketOptions([]string{"--follow"}, environment, &stderr)
+	if err != nil {
+		t.Fatalf("parseWebSocketOptions returned error: %v", err)
+	}
+	if !options.follow {
+		t.Fatal("--follow did not enable unbounded listener mode")
+	}
+
+	_, err = parseWebSocketOptions([]string{"--follow", "--stop-after", "45s"}, environment, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+		t.Fatalf("combined --follow and --stop-after error = %v", err)
+	}
+}
+
+func TestWebSocketRejectsNonPositiveStopAfter(t *testing.T) {
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "")
+	environment, err := selectedEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	_, err = parseWebSocketOptions([]string{"--stop-after", "0s"}, environment, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "must be greater than zero") {
+		t.Fatalf("zero --stop-after error = %v", err)
+	}
+}
+
+func TestAPIRequestUsesExplicitStagingEnvironment(t *testing.T) {
+	configureTestCredentials(t)
+	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "staging")
+	requestCount := 0
+	var requestURL string
+	useRoundTripper(t, func(request *http.Request) (*http.Response, error) {
+		requestCount++
+		requestURL = request.URL.String()
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"items":[]}`)),
+		}, nil
+	})
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"api", "GET", "/api/v1/wallets"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("Run returned %d: %s", code, stderr.String())
+	}
+	if requestCount != 1 {
+		t.Fatalf("API read sent %d requests, want exactly 1", requestCount)
+	}
+	if requestURL != "https://brosettlement-staging-api.brolabel.io/api/v1/wallets" {
+		t.Fatalf("API read used %q, want staging API", requestURL)
 	}
 }
 

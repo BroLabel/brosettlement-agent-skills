@@ -17,13 +17,27 @@ import (
 )
 
 const defaultWebSocketURL = "wss://brosettlement-api.brolabel.io/v1/ws"
+const defaultStopAfter = 30 * time.Second
 
 func main() {
 	wsURL := flag.String("ws-url", defaultWebSocketURL, "BroSettlement WebSocket URL")
 	logPath := flag.String("log-path", "brosettlement_ws_listener.log", "JSONL log path")
 	reconnectDelay := flag.Duration("reconnect-delay", 5*time.Second, "Reconnect delay")
-	stopAfter := flag.Duration("stop-after", 0, "Optional smoke-test duration")
+	stopAfter := flag.Duration("stop-after", defaultStopAfter, "Bounded listener duration (default 30s)")
+	follow := flag.Bool("follow", false, "Run without a time limit until interrupted")
 	flag.Parse()
+	stopAfterSet := false
+	flag.Visit(func(item *flag.Flag) {
+		if item.Name == "stop-after" {
+			stopAfterSet = true
+		}
+	})
+	if *follow && stopAfterSet {
+		fail("--follow cannot be combined with --stop-after")
+	}
+	if !*follow && *stopAfter <= 0 {
+		fail("--stop-after must be greater than zero; use --follow for an unbounded listener")
+	}
 
 	logFile, err := os.OpenFile(*logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -34,7 +48,7 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if *stopAfter > 0 {
+	if !*follow {
 		var timeoutCancel context.CancelFunc
 		ctx, timeoutCancel = context.WithTimeout(ctx, *stopAfter)
 		defer timeoutCancel()

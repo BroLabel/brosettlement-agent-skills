@@ -38,6 +38,7 @@ func runAPI(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(stdout, "Usage: brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]")
 		fmt.Fprintln(stdout, "Non-read-only methods require --confirm.")
+		fmt.Fprintln(stdout, "Non-read-only methods are sent once; automatic HTTP transport replay is disabled.")
 		return errHelp
 	}
 	if len(args) < 2 {
@@ -161,6 +162,15 @@ func executeAPI(options apiOptions, stdout io.Writer) error {
 	request, err := http.NewRequest(strings.ToUpper(options.method), requestURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
+	}
+	if !isReadOnlyMethod(options.method) {
+		// net/http may transparently replay requests carrying an idempotency
+		// header after some reused-connection failures. Mutations are deliberately
+		// single-attempt so an uncertain result can be reconciled before retrying.
+		request.GetBody = nil
+		if request.Body == nil || request.Body == http.NoBody {
+			request.Body = io.NopCloser(bytes.NewReader(nil))
+		}
 	}
 	request.Header = headers
 	response, err := newHTTPClient(options.timeout).Do(request)

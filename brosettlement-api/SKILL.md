@@ -43,26 +43,39 @@ credential values into source files, prompts, generated examples, or shell histo
 
 ## Workflow
 
-1. Prepare the bundled CLI and run its automatic version gate as described below. This may update
-   only the compiled CLI executable; never update `SKILL.md`, references, scripts, or sibling skills.
+1. Prepare the bundled CLI and run its automatic version gate as described below. Run this gate at
+   most once per top-level user turn. When this skill is called by `$brosettlement-onboarding`, run
+   it once for the continuous onboarding session and reuse the result for every account, wallet,
+   status, and verification call in that session. This may update only the compiled CLI executable;
+   never update `SKILL.md`, references, scripts, or sibling skills.
 2. Default to production and state that explicitly. Use staging only when it was explicitly
    selected or derived from the staging Console hostname.
-3. Fetch the current Swagger JSON before answering endpoint, command, field, enum, scope, or error-schema questions.
+3. Fetch the current Swagger JSON once for the selected environment and reuse that exact document
+   for all endpoint, field, enum, scope, and error-schema decisions in the same user turn or
+   continuous onboarding session. Fetch it again only if the environment changes, the user asks
+   for a refresh, or the server reports a contract mismatch. When command discovery is necessary,
+   the reduced `commands` lister may make one separate discovery fetch before the single full-schema
+   fetch; skip discovery when the exact target is already known. Never refetch once per endpoint.
 4. Identify the exact operation, request schema, response schema, required scope, authentication headers, body-hash requirement, and idempotency requirement.
 5. Resolve credentials through the credential protocol and verify prerequisites without printing secrets.
 6. Prepare a redacted request plan: environment, method, exact target, scope, body source,
    idempotency behavior, and expected success response. Keep it internal or summarize it in one
    sentence when a calling skill defines an authorized tutorial flow; show the full plan when the
    user requests it or before other mutations.
-7. Run a safe read-only authentication probe before the first mutation when an applicable read scope exists.
+7. Run one safe read-only authentication probe before the first mutation when an applicable read
+   scope exists. Reuse a successful probe for the same API key and environment throughout the user
+   turn or continuous onboarding session. Probe again only if the credential, environment, or
+   relevant access configuration changes, or an authentication/access error invalidates the result.
 8. Serialize the request body exactly once and hash the exact bytes that will be sent.
 9. Build the canonical string with the exact request target, including the raw query string.
 10. Ask for confirmation immediately before a state-changing request unless a calling skill has
     already captured explicit, narrowly scoped standing authorization. In particular,
-    `$brosettlement-onboarding` may authorize exactly one staging/testnet ledger account and one
-    linked staging/testnet wallet as part of the requested tutorial. This exception never covers
-    MPC initialization, withdrawal, signing, production/mainnet activity, destructive actions, or
-    additional resources.
+    `$brosettlement-onboarding` may authorize exactly one tutorial ledger account and one linked
+    **testnet blockchain wallet** against either the production or staging API environment. Under
+    that standing authorization, pass the CLI's required `--confirm` flag without asking another
+    yes/no question. This exception never covers MPC initialization, withdrawal, signing, a
+    mainnet blockchain wallet or operation, destructive actions, or additional resources. The
+    production API environment alone is not mainnet activity.
 11. Sign and send the confirmed request once with all required headers.
 12. Validate the HTTP status and parse errors using the documented error schema.
 13. Verify the resulting resource or lifecycle through a read endpoint and, when relevant, WebSocket events.
@@ -97,8 +110,10 @@ is missing, build it from the bundled source:
 ./scripts/build-cli.sh
 ```
 
-At the start of every request that activates this skill, run exactly one automatic update check
-before any BroSettlement API operation:
+Run exactly one automatic update check before the first BroSettlement API operation in a top-level
+user turn. When `$brosettlement-onboarding` calls this skill repeatedly, treat the continuous
+onboarding flow as one session: run the gate once, remember that it succeeded or was safely skipped,
+and do not rerun it before each API call:
 
 ```bash
 ./scripts/go/bin/brosettlement update --auto
@@ -150,7 +165,12 @@ the `@brosettlement` command surface.
 ## Answer API command questions
 
 Use the Go command lister whenever the user asks what is available or asks for an operation by
-topic. It fetches Swagger on every run.
+topic. The command fetches Swagger on every invocation and returns only reduced command metadata,
+so invoke it at most once and reuse its result when several operations are handled in the same user
+turn or continuous onboarding session. Fetch the complete Swagger document once afterward only
+when exact schemas, scopes, or error details are needed. Skip the lister entirely when the exact
+target is already known. Do not run it separately for the tutorial account create, account
+read-back, wallet create, and wallet read-back.
 
 ```bash
 ./scripts/go/bin/brosettlement commands
@@ -160,7 +180,7 @@ topic. It fetches Swagger on every run.
 
 Return matching HTTP methods, paths, and Swagger summaries. Then inspect the selected operation in
 Swagger JSON before generating payloads or code. Do not answer from the bundled endpoint snapshot
-when live staging Swagger is reachable.
+when the selected environment's live Swagger is reachable.
 
 ## Send signed REST requests
 
@@ -181,9 +201,11 @@ The client signs the exact target and body bytes, adds required empty-body hashe
 keys for the operations currently documented by Swagger, sends the request, and prints a
 structured response. `GET`, `HEAD`, and `OPTIONS` run directly. Every other method requires
 `--confirm`. Supply it only after explicit authorization: either immediate user confirmation or
-narrow standing authorization defined by the calling skill. The onboarding exception covers only
-one staging/testnet ledger account and one linked staging/testnet wallet; it does not remove the
-CLI safeguard or authorize any other mutation.
+narrow standing authorization defined by the calling skill. The onboarding exception covers one
+tutorial ledger account and one linked **testnet blockchain wallet** in either API environment.
+Pass `--confirm` automatically under that authorization; do not convert the CLI flag into another
+user question. It does not remove the CLI safeguard or authorize any other mutation, especially a
+mainnet blockchain wallet or operation.
 
 For `POST /api/v1/mpc/initialize`, follow the current selected-environment operation contract
 exactly. The verified production and staging contracts currently require:
@@ -227,14 +249,16 @@ adds `req-<nonce>`. Pass an explicit stable key when preparing a request that ma
 
 ## Listen to WebSocket events
 
-Use the Go listener:
+Use the Go listener. Every listener started synchronously while answering a user must be bounded;
+include `--stop-after` (normally `30s`, and no more than `2m` for an interactive check):
 
 ```bash
 export BROSETTLEMENT_API_KEY_ID="<uuid>"
 export BROSETTLEMENT_API_PRIVATE_KEY_FILE="/secure/path/private.pem"
 
 ./scripts/go/bin/brosettlement websocket listen \
-  --log-path ./brosettlement_ws_listener.log
+  --log-path ./brosettlement_ws_listener.log \
+  --stop-after 30s
 ```
 
 For a bounded smoke test:
@@ -244,8 +268,11 @@ For a bounded smoke test:
 ```
 
 The listener uses the separate `WS_CONNECT` canonical string, reconnects after failures, and
-writes structured JSON lines to stdout and a protected local log. Never log the signed WebSocket
-URL because its query contains authentication material.
+writes structured JSON lines to stdout and a protected local log. It stops after `30s` by default.
+Never run an unbounded listener as a synchronous verification step. Pass `--follow` only when the
+user explicitly asks for a long-running listener and it is launched as a separately managed
+background process. Never log the signed WebSocket URL because its query contains authentication
+material.
 
 ## Safety rules
 

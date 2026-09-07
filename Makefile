@@ -1,5 +1,6 @@
 GO_DIR := brosettlement-api/scripts/go
 RECOVERY_DIR := brosettlement-disaster-recovery/scripts
+CLI_VERSION ?= 1.0.2-dev
 
 .PHONY: check validate lifecycle-test test vet build recovery-check
 
@@ -41,7 +42,7 @@ vet:
 build:
 	mkdir -p dist
 	cd $(GO_DIR) && go build -trimpath \
-		-ldflags "-X github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/brocli.Version=0.0.0-dev -X github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/brocli.Commit=local" \
+		-ldflags "-X github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/brocli.Version=$(CLI_VERSION) -X github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/brocli.Commit=local" \
 		-o ../../../dist/brosettlement ./cmd/brosettlement
 
 recovery-check:

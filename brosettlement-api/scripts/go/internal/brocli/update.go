@@ -315,7 +315,7 @@ func isNewerVersion(latest, current string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("invalid latest version: %w", err)
 	}
-	if current == "dev" || current == "unknown" || strings.HasSuffix(current, "-dev") {
+	if current == "dev" || current == "unknown" {
 		return true, nil
 	}
 	currentParts, err := parseSemanticVersion(current)
@@ -327,7 +327,13 @@ func isNewerVersion(latest, current string) (bool, error) {
 			return latestParts[index] > currentParts[index], nil
 		}
 	}
-	return false, nil
+	return isPrereleaseVersion(current) && !isPrereleaseVersion(latest), nil
+}
+
+func isPrereleaseVersion(version string) bool {
+	version = strings.TrimPrefix(version, "v")
+	_, _, found := strings.Cut(version, "-")
+	return found
 }
 
 func parseSemanticVersion(version string) ([3]int, error) {
