@@ -91,3 +91,39 @@ func TestRESTHeadersKeepsBodyHashEmptyForBodylessGet(t *testing.T) {
 		t.Fatalf("unexpected X-Api-Body-Hash: %q", got)
 	}
 }
+
+func TestNormalizeExplicitTransactionIdempotencyKey(t *testing.T) {
+	normalized, err := NormalizeExplicitIdempotencyKey(
+		"POST",
+		"/api/v1/transactions?lang=en",
+		"  withdrawal-test-1  ",
+	)
+	if err != nil {
+		t.Fatalf("NormalizeExplicitIdempotencyKey: %v", err)
+	}
+	if normalized != "withdrawal-test-1" {
+		t.Fatalf("normalized key = %q, want withdrawal-test-1", normalized)
+	}
+}
+
+func TestRejectsInvalidExplicitTransactionIdempotencyKeys(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "empty", value: "   "},
+		{name: "non ASCII", value: "withdrawal-☃"},
+		{name: "too long", value: strings.Repeat("a", 129)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := NormalizeExplicitIdempotencyKey(
+				"POST",
+				"/api/v1/transactions",
+				test.value,
+			); err == nil {
+				t.Fatalf("NormalizeExplicitIdempotencyKey(%q) succeeded, want error", test.value)
+			}
+		})
+	}
+}

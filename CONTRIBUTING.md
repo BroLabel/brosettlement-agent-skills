@@ -12,7 +12,9 @@ Thank you for helping improve BroSettlement Agent Skills.
 4. Never add credentials, private keys, API Key IDs, signed WebSocket URLs, organization data,
    MPC shares, or real customer payloads.
 5. Keep API-key creation and management as manual user actions in BroSettlement Console.
-6. Require explicit confirmation before state-changing API calls.
+6. Require explicit authorization before state-changing API calls. An unambiguous current user
+   instruction for one exact operation is already confirmation; pass the CLI's `--confirm` flag
+   without asking the same yes/no question again.
 
 ## Validate changes
 

@@ -55,9 +55,12 @@ Treat API key creation, editing, rotation, and revocation as user-only Console a
 - Use the user's language for conversation, while preserving Console labels, commands, environment variables, and status values exactly.
 - Perform safe read-only checks when tools are available. Ask before package installation, local
   credential generation unless it is covered by the narrow onboarding authorization below,
-  process startup, MPC initialization, a blockchain-mainnet mutation, a withdrawal, or another
-  higher-risk mutation. Merely using the production API is not a mainnet mutation. API key
-  management remains user-only and is never an agent action.
+  process startup, MPC initialization, a blockchain-mainnet mutation, or another higher-risk
+  mutation when the current user message has not already authorized the exact action. An explicit
+  withdrawal instruction that resolves the source wallet, network, asset, amount, and destination
+  is authorization for that one withdrawal; do not ask the same yes/no question again. Merely
+  using the production API is not a mainnet mutation. API key management remains user-only and is
+  never an agent action.
 - Treat an explicit request to complete onboarding or create the first testnet wallet as standing
   authorization for exactly one ledger account and one linked wallet on a testnet blockchain
   network, whether the selected BroSettlement API environment is production or staging. Do not ask
@@ -93,8 +96,9 @@ read-only checks to inspect the resolved installation and approved runtime confi
 Reuse every verified checkpoint and continue from the first genuinely missing prerequisite. Do not
 ask again about account access, installation folder, existing keys, Co-Signer setup, or MPC/DKG when
 the available configuration and read-only checks already answer those questions. If the request is
-only a routine post-onboarding API operation, route execution through `$brosettlement-api` and use
-this skill only for the onboarding state and safety rules that still apply.
+only a routine post-onboarding ledger-account, wallet, or withdrawal operation, route execution
+through `$brosettlement-api` and use this skill only for the onboarding state and safety rules that
+still apply. For a resolved withdrawal, do not inspect or recheck Co-Signer/MPC state first.
 
 For a new onboarding, the user's request to complete onboarding or create the first testnet wallet
 authorizes the linked tutorial ledger-account and wallet pair described above. For a routine
@@ -109,6 +113,10 @@ Swagger; do not require `accounts:create` merely to create a wallet for an exist
 the requested operation, return its compact result and retrieval commands. Do not continue into the
 optional deposit, withdrawal, backup-path, or full onboarding completion flow unless the user asked
 to resume onboarding.
+
+For a routine withdrawal after this onboarding, reuse the same key/environment session evidence,
+resolved wallet, and successful account/wallet checkpoints. Route the exact request through the
+companion skill's withdrawal fast path; do not repeat permission probes or confirmation questions.
 
 The mandatory first-account question and full ordered sequence below apply only to a new onboarding
 whose state cannot be recovered safely from the current conversation or existing configuration.
@@ -533,10 +541,14 @@ After MPC readiness:
       return the wallet and ledger retrieval commands instead of waiting longer;
     - do not call `POST /api/v1/transactions` for a deposit; that endpoint creates an outgoing
       transaction.
-12. Offer a small withdrawal separately. Before any withdrawal, provide manual Console
-    instructions for the current required scopes, wait for confirmation, and obtain explicit
-    authorization for the state-changing request.
-13. Reconcile completed tests with REST, bounded optional WebSocket events, and ledger records.
+12. Offer a small withdrawal separately. Once the source wallet, network, asset, amount, and
+    destination are resolved, invoke `$brosettlement-api`'s withdrawal fast path. The user's exact
+    instruction is confirmation for that one request; do not preflight permissions or ask again.
+13. For a withdrawal, use one immediate `GET /api/v1/transactions/{id}` as the required
+    verification. If it is non-terminal, report **withdrawal accepted; verification pending**,
+    return the retrieval command, and stop. Do not add account, wallet, authentication, balance,
+    Co-Signer, MPC, ledger-list, or WebSocket probes unless the returned transaction exposes a
+    concrete inconsistency. Optional checks must not block or delay the result.
 14. Report the existing credential and MPC-share locations as described below. During normal
     onboarding, do not ask for a backup destination or copy, move, archive, upload, or display any
     secret. Use the protected archive exception only for an approved incompatible upgrade.
@@ -627,9 +639,12 @@ initialize a replacement MPC key as a backup procedure.
   confirmation of each state-changing mainnet action.
 - Do not turn operational monitoring guidance into an onboarding checkpoint or follow-up question.
 - Within one onboarding session, run the environment-independent CLI update gate exactly once.
-  Fetch Swagger once per selected environment, and run one read-only authentication probe per API
-  key and environment. Refetch Swagger only when the environment changes or the contract is
-  invalidated; repeat the probe only when its key/environment changes or access is invalidated.
+  Fetch Swagger once per selected environment. Run a read-only authentication probe only when no
+  successful operation already establishes access for that key and environment. Refetch Swagger
+  only when the environment changes or the contract is invalidated; repeat a probe only when its
+  key/environment changes or access is invalidated. Reuse successful account and wallet operations
+  as session evidence, and never add another probe solely to predict a mutation-only scope before
+  an explicitly authorized withdrawal.
 - Never wait synchronously on an unbounded WebSocket listener. Use REST for required lifecycle
   verification and give every optional WebSocket observation an explicit finite stop condition.
 - Do not ask for a backup directory or copy secrets during normal onboarding; report the existing

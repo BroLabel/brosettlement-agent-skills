@@ -28,6 +28,7 @@ Environment:
 
 Safety:
   Mutations require --confirm and automatic HTTP transport replay is disabled.
+  Transaction creation requires an explicit stable --idempotency-key.
   WebSocket listeners stop after 30s by default; --follow is explicitly unbounded.
 
 Run "brosettlement <command> --help" for command options.

@@ -27,14 +27,21 @@ Required API checkpoints:
 | DKG monitoring | `brosettlement mpc status` | MPC key and every chain selected for onboarding reach ready states |
 | Ledger account | Separate integration key: `POST /api/v1/ledger/accounts`, then `GET /api/v1/ledger/accounts/{accountId}` | Key has `accounts:create` and `accounts:read`; created resource is readable |
 | Wallet | Separate integration key: `POST /api/v1/wallets`, then `GET /api/v1/wallets/{walletId}` | Key also has `wallets:create` and `wallets:read`; wallet reaches `ACTIVE` |
+| Explicit withdrawal | `POST /api/v1/transactions`, then `GET /api/v1/transactions/{id}` | Create is sent once with stable idempotency; terminal lifecycle is read back when permitted |
 
 Run the companion CLI update gate exactly once before the first API operation in an onboarding
 session; never repeat that environment-independent gate during the session. Fetch the current
 Swagger once for the selected environment before the first state-changing operation, then reuse
 that verified executable and contract for the linked account and wallet flow. Refetch only when the
 environment changes or the server reports a contract/schema mismatch. Treat exact fields, scopes,
-enums, and errors from Swagger as authoritative. Run one read-only authentication probe per API key
-and environment in the session and reuse its result until the key, environment, or access changes.
+enums, and errors from Swagger as authoritative. Run one read-only authentication probe only when
+no successful operation already establishes access for that API key and environment; reuse its
+result until the key, environment, or access changes. Successful account and wallet operations are
+also reusable evidence. Do not repeat their GETs or a generic authentication probe solely to
+predict access for a later withdrawal. The current
+Integration API may not expose complete current-key scope introspection; in that case, execute an
+explicitly authorized exact withdrawal once and handle a concrete `403` instead of asking the user
+to reconfirm scopes preemptively.
 
 ## API key creation is user-only
 
@@ -74,18 +81,19 @@ Co-Signer monitoring, periodic health checks, background alerts, reminders, or a
 ### Existing-installation and routine-operation fast path
 
 Do not restart at checkpoint 1 merely because this skill is activated again. When the user requests
-a routine ledger-account or wallet operation, first inspect the resolved installation and approved
-runtime configuration read-only. Reuse an already established API environment, integration API Key
-ID reference and matching private-key path, successful authentication probe, Co-Signer/MPC
-readiness, and ledger-account selection when those facts are unambiguous. Continue from the first
-missing prerequisite or route a purely post-onboarding API operation directly through
-`$brosettlement-api`.
+a routine ledger-account or wallet operation, first inspect only the resolved configuration needed
+for that operation. Reuse an already established API environment, integration API Key ID reference,
+matching private-key path, successful API access evidence, and ledger-account selection when those
+facts are unambiguous. For a resolved post-onboarding withdrawal, route directly through
+`$brosettlement-api`; do not inspect or recheck installation, Co-Signer, or MPC state first.
 
 Ask the account-access question, installation-folder question, and other setup questions only for a
 new onboarding or when the corresponding fact cannot be recovered safely. Never infer a credential
 value, account selection, or blockchain network from ambiguous state. Existing security gates for
-user-only Console actions, MPC initialization, blockchain-mainnet mutations, withdrawals, and
-destructive actions still apply.
+user-only Console actions, MPC initialization, blockchain-mainnet mutations, and destructive
+actions still apply. For a withdrawal, a current instruction that resolves the exact source wallet,
+network, asset, amount, and destination is the confirmation for that one operation; do not ask a
+duplicate yes/no question.
 
 For a new onboarding, the user's request to complete onboarding or create the first testnet wallet
 authorizes the linked tutorial ledger-account and wallet pair defined below. For a routine
@@ -499,9 +507,20 @@ not remediate the file on the user's behalf.
     **deposit verification pending**, include the public transaction hash when supplied, and return
     the wallet and ledger retrieval commands instead of waiting longer. Never call
     `POST /api/v1/transactions` to create a deposit.
-13. Offer a small withdrawal as a separate, explicitly confirmed operation, only after the user
-    has manually added the current required scopes to a suitable integration key.
-14. Confirm the ledger and transaction lifecycle match the on-chain result.
+13. Offer a small withdrawal separately. Once the user supplies or accepts the exact source wallet,
+    network, asset, amount, and destination, treat that as authorization for one operation. Reuse
+    the established key/environment and wallet state; do not repeat account, wallet, authentication,
+    transaction-list, Co-Signer, MPC, or balance requests merely to probe permissions. Submit the
+    exact create once with stable idempotency. On `403 INSUFFICIENT_SCOPE`, request only the write
+    scope required by current Swagger and stop until the user confirms the Console change. On
+    `403 IP_NOT_ALLOWED`, direct the user to the key's allowlist settings instead.
+14. After an accepted create, report its sanitized response and ID, then make one immediate
+    `GET /api/v1/transactions/{id}`. If it is non-terminal, report **withdrawal accepted;
+    verification pending**, return the retrieval command, and stop. If that GET returns
+    `403 INSUFFICIENT_SCOPE`, use the same pending wording, request only the required
+    transaction-read scope, and never submit the mutation again. Do not add account, wallet,
+    authentication, balance, Co-Signer, MPC, ledger-list, or WebSocket probes unless the returned
+    transaction exposes a concrete inconsistency.
 
 ## Storage, backup, and recovery
 

@@ -18,7 +18,7 @@ const target = option("--target");
 const bodyFile = option("--body-file");
 const timestamp = option("--timestamp") ?? String(Math.floor(Date.now() / 1000));
 const nonce = option("--nonce") ?? randomUUID();
-const explicitIdempotencyKey = option("--idempotency-key");
+let explicitIdempotencyKey = option("--idempotency-key");
 const keyId = process.env.BROSETTLEMENT_API_KEY_ID;
 const privateKeyFile = process.env.BROSETTLEMENT_API_PRIVATE_KEY_FILE;
 const privateKeyInline = process.env.BROSETTLEMENT_API_PRIVATE_KEY;
@@ -27,6 +27,18 @@ if (!method || !target) {
   fail("Usage: sign-request.mjs --method METHOD --target /exact/path?query [--body-file FILE] [--idempotency-key VALUE] [--timestamp UNIX_SECONDS] [--nonce VALUE]");
 }
 if (!target.startsWith("/")) fail("--target must be the exact request target beginning with /");
+if (method === "POST" && target.split("?", 1)[0] === "/api/v1/transactions") {
+  explicitIdempotencyKey = explicitIdempotencyKey?.trim();
+  if (!explicitIdempotencyKey) {
+    fail("POST /api/v1/transactions requires an explicit stable --idempotency-key");
+  }
+  if (Buffer.byteLength(explicitIdempotencyKey, "ascii") > 128) {
+    fail("--idempotency-key must be at most 128 ASCII bytes");
+  }
+  if (!/^[\x20-\x7e]+$/.test(explicitIdempotencyKey)) {
+    fail("--idempotency-key must contain only printable ASCII characters");
+  }
+}
 if (!keyId) fail("Set BROSETTLEMENT_API_KEY_ID");
 if (!privateKeyFile && !privateKeyInline) {
   fail("Set BROSETTLEMENT_API_PRIVATE_KEY_FILE or BROSETTLEMENT_API_PRIVATE_KEY");

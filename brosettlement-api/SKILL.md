@@ -25,8 +25,10 @@ Prefer an existing API key. Ask only for:
 
 - the API Key ID;
 - the absolute path to the matching Ed25519 private PEM already stored on the user's machine;
-- confirmation that the key has the required scope and that all required settings shown on the
-  API-key page are complete.
+- confirmation that the key has the required scopes and that all required settings shown on the
+  API-key page are complete only when the key is new, its access configuration changed, or a
+  current API response proves that access is missing. Do not request duplicate scope confirmation
+  after successful operations with the same key and environment already establish usable access.
 
 Never ask the user to paste a private key, password, JWT, TOTP code, or session token into chat.
 Do not ask for the user's outbound public IP or call an IP-discovery service; direct the user to
@@ -40,6 +42,24 @@ Load existing credentials at runtime through `BROSETTLEMENT_API_KEY_ID` and
 `BROSETTLEMENT_API_PRIVATE_KEY_FILE`. Select endpoints with
 `BROSETTLEMENT_ENVIRONMENT=production|staging`; an unset value means production. Do not copy
 credential values into source files, prompts, generated examples, or shell history.
+
+## Scope reuse and withdrawal fast path
+
+Reuse successful operations for the same API Key ID and environment as session evidence. Account
+and wallet creation plus read-back already establish authentication and applicable wallet access;
+do not repeat generic auth, wallet, balance, transaction-list, Co-Signer, or MPC probes merely to
+predict withdrawal scopes.
+
+An exact user instruction that resolves the source wallet, network, asset, amount, and destination
+authorizes that one withdrawal. Pass `--confirm`, require an explicit stable `--idempotency-key`,
+and submit once without a permission-probe GET or duplicate question. On `403 INSUFFICIENT_SCOPE`,
+request only the write scope named by current Swagger and stop. Treat `IP_NOT_ALLOWED` as an
+allowlist issue. After an accepted create, report its sanitized response and ID, then verify only
+that ID with one immediate GET. If it is non-terminal or the GET returns `403 INSUFFICIENT_SCOPE`,
+report **withdrawal accepted; verification pending** and stop; request the read scope only for the
+403 case. Never resubmit an accepted withdrawal, poll synchronously, or block on WebSocket
+verification. See [references/api.md](references/api.md#scope-evidence-and-withdrawal-execution)
+for the complete error and retry rules.
 
 ## Workflow
 
@@ -63,9 +83,13 @@ credential values into source files, prompts, generated examples, or shell histo
    sentence when a calling skill defines an authorized tutorial flow; show the full plan when the
    user requests it or before other mutations.
 7. Run one safe read-only authentication probe before the first mutation when an applicable read
-   scope exists. Reuse a successful probe for the same API key and environment throughout the user
-   turn or continuous onboarding session. Probe again only if the credential, environment, or
-   relevant access configuration changes, or an authentication/access error invalidates the result.
+   scope exists and no successful operation in the current session already establishes access.
+   Reuse a successful probe and subsequent successful operations for the same API key and
+   environment throughout the user turn or continuous onboarding session. Probe again only if the
+   credential, environment, or relevant access configuration changes, or an authentication/access
+   error invalidates the result. Never add a probe solely to predict whether a mutation-only scope
+   exists. After the user fixes a scope named by `INSUFFICIENT_SCOPE`, resume the identical failed
+   operation directly; do not insert an unrelated authentication probe.
 8. Serialize the request body exactly once and hash the exact bytes that will be sent.
 9. Build the canonical string with the exact request target, including the raw query string.
 10. Ask for confirmation immediately before a state-changing request unless a calling skill has
@@ -75,7 +99,9 @@ credential values into source files, prompts, generated examples, or shell histo
     that standing authorization, pass the CLI's required `--confirm` flag without asking another
     yes/no question. This exception never covers MPC initialization, withdrawal, signing, a
     mainnet blockchain wallet or operation, destructive actions, or additional resources. The
-    production API environment alone is not mainnet activity.
+    production API environment alone is not mainnet activity. Separately, the user's current
+    explicit instruction to perform one exact withdrawal is immediate authorization for that
+    withdrawal; do not turn the CLI safeguard into a duplicate confirmation question.
 11. Sign and send the confirmed request once with all required headers.
 12. Validate the HTTP status and parse errors using the documented error schema.
 13. Verify the resulting resource or lifecycle through a read endpoint and, when relevant, WebSocket events.
@@ -244,8 +270,10 @@ node scripts/sign-request.mjs \
 ```
 
 Send the same bytes from `--body-file`; reformatting JSON after signing invalidates the body hash and signature.
-If a documented operation requires idempotency and `--idempotency-key` is omitted, the generator
-adds `req-<nonce>`. Pass an explicit stable key when preparing a request that may be retried.
+For `POST /api/v1/transactions`, `--idempotency-key` is mandatory so a rejected or uncertain
+withdrawal can be reconciled safely without generating a different key. For other documented
+idempotent operations, the generator adds `req-<nonce>` when the option is omitted. Pass an
+explicit stable key whenever an operation may need a controlled retry.
 
 ## Listen to WebSocket events
 
@@ -284,7 +312,10 @@ material.
 - Treat production and staging as distinct API environments, and testnet and mainnet as distinct
   blockchain targets. Production is the default API environment, but mainnet activity still
   requires explicit authorization.
-- Treat create, withdrawal, MPC initialization, and signing actions as state-changing. Confirm the intended resource and environment before executing them.
+- Treat create, withdrawal, MPC initialization, and signing actions as state-changing. Confirm the
+  intended resource and environment before executing them, while accepting an unambiguous explicit
+  instruction in the current user message as that confirmation. Do not ask the same yes/no question
+  again.
 - Do not retry a mutation with a new idempotency key after an unknown outcome until the existing outcome has been checked.
 - Do not claim success from an HTTP request alone; verify the resulting resource or terminal lifecycle status.
 

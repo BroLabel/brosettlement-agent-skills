@@ -157,6 +157,31 @@ func RequiresIdempotency(method, requestTarget string) bool {
 		strings.HasSuffix(path, "/messages")
 }
 
+func RequiresExplicitIdempotencyKey(method, requestTarget string) bool {
+	return strings.ToUpper(method) == http.MethodPost &&
+		requestPath(requestTarget) == "/api/v1/transactions"
+}
+
+func NormalizeExplicitIdempotencyKey(method, requestTarget, value string) (string, error) {
+	if !RequiresExplicitIdempotencyKey(method, requestTarget) {
+		return value, nil
+	}
+
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return "", errors.New("requires an explicit stable --idempotency-key")
+	}
+	if len(normalized) > 128 {
+		return "", errors.New("--idempotency-key must be at most 128 ASCII bytes")
+	}
+	for index := 0; index < len(normalized); index++ {
+		if normalized[index] < 0x20 || normalized[index] > 0x7e {
+			return "", errors.New("--idempotency-key must contain only printable ASCII characters")
+		}
+	}
+	return normalized, nil
+}
+
 func RequiresBodyHash(method, requestTarget string) bool {
 	if strings.ToUpper(method) != http.MethodPost {
 		return false

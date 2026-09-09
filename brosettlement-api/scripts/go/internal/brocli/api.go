@@ -38,6 +38,7 @@ func runAPI(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(stdout, "Usage: brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]")
 		fmt.Fprintln(stdout, "Non-read-only methods require --confirm.")
+		fmt.Fprintln(stdout, "POST /api/v1/transactions requires an explicit stable --idempotency-key.")
 		fmt.Fprintln(stdout, "Non-read-only methods are sent once; automatic HTTP transport replay is disabled.")
 		return errHelp
 	}
@@ -127,6 +128,15 @@ func executeAPI(options apiOptions, stdout io.Writer) error {
 	if !isReadOnlyMethod(options.method) && !options.confirmed {
 		return fmt.Errorf("%s %s may change state; review the request and pass --confirm", options.method, options.target)
 	}
+	normalizedIdempotencyKey, err := broauth.NormalizeExplicitIdempotencyKey(
+		options.method,
+		options.target,
+		options.idempotencyKey,
+	)
+	if err != nil {
+		return fmt.Errorf("%s %s %w", options.method, options.target, err)
+	}
+	options.idempotencyKey = normalizedIdempotencyKey
 
 	body := []byte{}
 	if options.bodyFile != "" {

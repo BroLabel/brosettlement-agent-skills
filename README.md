@@ -122,13 +122,19 @@ git push origin cli-v1.0.2
 The release workflow tests the CLI, cross-compiles the supported platform binaries, generates
 their SHA-256 checksums, and creates the GitHub Release. Do not reuse or move a published CLI tag.
 
-State-changing REST methods require explicit confirmation:
+State-changing REST methods require explicit authorization. When the current user message already
+specifies one exact operation, such as a withdrawal with its source, network, asset, amount, and
+destination, that message is the confirmation; the agent passes `--confirm` without asking the same
+yes/no question again:
 
 ```bash
 ./scripts/go/bin/brosettlement mpc initialize \
   --idempotency-key '<stable-key-for-this-initialization>' \
   --confirm
 ```
+
+Transaction creation additionally requires an explicit stable `--idempotency-key`. This lets the
+agent reconcile an access error or uncertain response without risking a second logical transfer.
 
 The signed commands load credentials at runtime:
 

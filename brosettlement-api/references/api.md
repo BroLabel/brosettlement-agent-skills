@@ -11,7 +11,7 @@
 - Production base URL (default): `https://brosettlement-api.brolabel.io`
 - Staging base URL: `https://brosettlement-staging-api.brolabel.io`
 - REST prefix: `/api/v1`
-- Production endpoint and OpenAPI metadata verified: 2026-08-31
+- Production endpoint and OpenAPI metadata verified: 2026-09-09
 
 The CLI defaults to production. Set `BROSETTLEMENT_ENVIRONMENT=staging` only for the staging
 environment. Fetch the selected environment's OpenAPI document whenever current fields, commands,
@@ -68,7 +68,10 @@ The current OpenAPI requires `X-Idempotency-Key` for:
 - `POST /api/v1/co-signer/intents/{intentId}/claim`
 - `POST /api/v1/co-signer/sessions/{sessionId}/messages`
 
-Use one unique key per logical operation. After a timeout, retry the identical request with the same key. Never reuse a key with different parameters or body bytes.
+Use one unique key per logical operation and retain it until the outcome is known. After a timeout
+or another unknown outcome, inspect the existing resource or status before any retry. If a retry is
+still justified, send identical request bytes with the same key. Never reuse a key with different
+parameters or body bytes.
 
 ## Endpoint index
 
@@ -139,6 +142,42 @@ Use the current OpenAPI description and public documentation for the complete ha
 - Consume event IDs idempotently and reconcile events with REST resources and ledger entries.
 - Inspect the documented `PublicErrorResponseDto` instead of matching only free-form messages.
 
+## Scope evidence and withdrawal execution
+
+The production Integration OpenAPI verified on 2026-09-09 does not expose a signed endpoint that
+returns the current API key's complete scope set. It defines `withdrawals:create` for
+`POST /api/v1/transactions` and `transactions:read` for transaction read endpoints. A successful
+read proves only the scope required by that read; it cannot prove a mutation-only scope.
+
+Within the same API-key/environment session, preserve evidence from successful operations. Account
+and wallet creation plus their read-backs already prove working authentication, allowlist handling,
+and the relevant account/wallet access. Do not repeat those GET requests or a generic authentication
+probe solely because the next operation is a withdrawal.
+
+For an exact withdrawal explicitly requested by the user:
+
+1. Reuse the known API environment, key, source wallet, and established session checkpoints.
+2. Treat the exact request as authorization and submit `POST /api/v1/transactions` once with a
+   stable idempotency key; do not preflight `transactions:read`.
+3. On `403 INSUFFICIENT_SCOPE`, identify `withdrawals:create` from the current Swagger, give the
+   user manual Console instructions, and stop. After the user confirms the access change, retry
+   only the identical request with the same key; do not insert another authentication probe.
+4. On `403 IP_NOT_ALLOWED`, direct the user to the key's allowlist settings instead of requesting a
+   scope.
+5. On an accepted create, report its sanitized response and ID, then make one immediate read of that
+   transaction by ID. If it is non-terminal, report **withdrawal accepted; verification pending**,
+   return the retrieval command, and stop without polling. If the GET receives
+   `403 INSUFFICIENT_SCOPE`, use the same pending wording and request only `transactions:read`.
+   Do not resubmit the transaction. WebSocket observation is optional and must never delay this
+   result.
+6. If the create outcome is unknown, inspect the returned transaction ID first when one is
+   available. When no ID or other lookup handle was returned, the only safe fallback is one replay
+   of the exact same target and body bytes with the same idempotency key; never generate a new key.
+
+If a future selected-environment Swagger exposes a signed current-key introspection endpoint, use
+it once and compare its returned scopes with the operation requirements instead of probing
+unrelated business endpoints.
+
 ## Bundled Go CLI
 
 Run from `scripts/go`:
@@ -150,6 +189,10 @@ Run from `scripts/go`:
 | `go run ./cmd/brosettlement mpc status` | Read the current MPC and chain readiness status. |
 | `go run ./cmd/brosettlement mpc initialize --confirm [options]` | Send the verified staging-compatible idempotent initialization request. |
 | `go run ./cmd/brosettlement websocket listen --stop-after 30s [options]` | Run a bounded synchronous listener, reconnect as needed, and record events as JSONL. |
+
+`POST /api/v1/transactions` requires an explicit stable `--idempotency-key`; the CLI does not
+generate a throwaway key for transaction creation. This preserves the exact logical request for
+scope-fix retries and unknown-outcome reconciliation.
 
 Build a reusable binary after creating `./bin`:
 
@@ -168,11 +211,13 @@ The signed tools read:
 
 Keep the private key file outside the skill and source repository.
 
-The CLI version gate, selected-environment OpenAPI fetch, and read-only authentication probe are
-session prerequisites, not per-operation prerequisites. Run each once per top-level user turn and
-reuse it. During a continuous onboarding session, reuse each successful result for the same API
-environment and API key across the account create, account read-back, wallet create, and wallet
-read-back. Repeat only when its inputs change or a relevant server error invalidates it.
+The CLI version gate and selected-environment OpenAPI fetch are session prerequisites, not
+per-operation prerequisites. Run each at most once per top-level user turn. A read-only
+authentication probe is conditional: run it only when no successful operation in the current
+API-key/environment session already establishes access. During a continuous onboarding session,
+reuse each successful result across account creation, wallet creation, their read-backs, and an
+optional follow-up withdrawal. Repeat a prerequisite only when its inputs change or a relevant
+server error invalidates it.
 
 WebSocket checks stop after `30s` by default. For synchronous checks, keep that default or pass an
 explicit `--stop-after` of no more than `2m`. Pass `--follow` only when the user explicitly requests
@@ -185,23 +230,38 @@ the current turn.
    for this turn or continuous onboarding session.
 2. Select the operation and record method, exact target, required scope, body schema, success
    response, body-hash rule, and idempotency rule.
-3. Confirm API Key ID, local private-key file path, scope, and completion of the required
-   settings shown on the API-key page without displaying secrets or asking for the user's IP.
-4. Run one applicable read-only probe to validate the signature, timestamp, nonce, key status,
-   and allowlist before the first mutation. Reuse it for the same key and API environment unless a
-   relevant configuration change or server error invalidates it.
-5. Show a redacted mutation plan and obtain confirmation, unless a calling skill has already
-   captured explicit standing authorization for the exact operation. The onboarding tutorial may
+3. Confirm API Key ID and the local private-key file path. Request scope/settings confirmation only
+   for a new or changed key, or after a current access error; reuse successful session evidence
+   instead of asking again.
+4. If no successful operation in the current key/environment session already establishes access,
+   run one applicable read-only probe to validate the signature, timestamp, nonce, key status, and
+   allowlist before the first mutation. Reuse that result unless a relevant configuration change
+   or server error invalidates it. Never add a probe merely to predict a mutation-only scope. After
+   a user fixes the exact scope named by `INSUFFICIENT_SCOPE`, retry that failed operation directly
+   rather than inserting an unrelated probe.
+5. Show a redacted mutation plan and obtain confirmation unless the current user instruction itself
+   unambiguously authorizes the exact operation or a calling skill has captured explicit standing
+   authorization. The onboarding tutorial may
    use this for one ledger account and one linked **testnet blockchain wallet** against either the
    production or staging API environment. Pass the CLI's `--confirm` flag under that authorization
    without another question. Keep the plan concise and never extend this exception to MPC
-   initialization, withdrawal, signing, a mainnet blockchain wallet or operation, destructive
-   actions, or additional resources. Using the production API does not itself mean mainnet.
+   initialization, a future withdrawal, signing, a mainnet blockchain wallet or operation,
+   destructive actions, or additional resources. An explicit request containing the exact source,
+   destination, asset, amount, and network authorizes only that one withdrawal and requires no
+   duplicate confirmation. Using the production API does not itself mean mainnet.
 6. Send the mutation once with a stable idempotency key.
 7. Verify the resulting resource or lifecycle through REST and relevant WebSocket events. Return
-   the sanitized API response and identifiers, and claim success only after read-back succeeds.
+   the sanitized API response and identifiers, and claim terminal success only after read-back
+   succeeds. If the mutation was accepted but read-back lacks its read scope, report the accepted
+   result and verification as pending, ask only for that read scope, and never repeat the mutation.
+   For a withdrawal, the required verification is one immediate documented GET for the returned
+   transaction ID. If it is non-terminal, report the accepted withdrawal as verification pending,
+   return the retrieval command, and stop. Additional balance, ledger-list, wallet, Co-Signer, MPC,
+   or WebSocket checks are optional and must not block the result unless that transaction exposes a
+   concrete inconsistency.
 8. If the outcome is uncertain, inspect status before retrying; do not switch payloads or
-   idempotency keys blindly.
+   idempotency keys blindly. If the create returned no lookup handle, replay the identical bytes at
+   most once with the same idempotency key so the server can return the existing logical result.
 
 ## Diagnostic order
 
@@ -209,9 +269,10 @@ the current turn.
 |---|---|
 | Signature rejected | Six canonical lines, exact raw query, API Key ID final line, timestamp skew, nonce grammar, padded Base64, and matching key pair. |
 | Body hash mismatch | Exact serialized bytes and `Content-Type`; for MPC initialization require the exact `{}` bytes and their documented hash. |
-| Forbidden request | Required operation scope, active key status, and network/access settings shown on the API-key page. |
+| `INSUFFICIENT_SCOPE` | Request only the exact failed-operation scope from current Swagger: the transaction-create scope for a rejected withdrawal POST, or the transaction-read scope for a rejected verification GET. |
+| `IP_NOT_ALLOWED` | Direct the user to the current API-key allowlist settings; do not request another scope. |
 | Validation or idempotency error | Current operation schema, required headers, stable logical-request key, and whether the key was reused with different bytes. |
-| Timeout or unknown mutation result | Read the resource or status before retrying with the same idempotency key. |
+| Timeout or unknown mutation result | Read the returned resource/status first. If no lookup handle exists, replay identical bytes at most once with the same idempotency key; never create a new logical request. |
 | WebSocket authentication failure | Separate `WS_CONNECT` canonical, fresh timestamp and nonce, `websockets:read`, URL encoding, and API-key page access settings. |
 
 Do not rotate credentials, change the body, or generate a new idempotency key as the first

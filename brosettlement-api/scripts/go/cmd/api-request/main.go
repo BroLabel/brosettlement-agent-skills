@@ -28,14 +28,27 @@ func main() {
 	target := flag.String("target", "", "Exact request target, including query string")
 	bodyFile := flag.String("body-file", "", "File containing the exact request body bytes")
 	idempotencyKey := flag.String("idempotency-key", "", "Explicit idempotency key")
+	confirmed := flag.Bool("confirm", false, "Confirm a state-changing request")
 	timeout := flag.Duration("timeout", 30*time.Second, "HTTP timeout")
 	flag.Parse()
 
 	if *target == "" || !strings.HasPrefix(*target, "/") {
 		fail("-target must be an exact request target beginning with /")
 	}
+	normalizedMethod := strings.ToUpper(*method)
+	if !isReadOnlyMethod(normalizedMethod) && !*confirmed {
+		fail("%s %s may change state; review the request and pass --confirm", normalizedMethod, *target)
+	}
+	normalizedIdempotencyKey, err := broauth.NormalizeExplicitIdempotencyKey(
+		normalizedMethod,
+		*target,
+		*idempotencyKey,
+	)
+	if err != nil {
+		fail("%s %s %v", normalizedMethod, *target, err)
+	}
+	*idempotencyKey = normalizedIdempotencyKey
 	body := []byte{}
-	var err error
 	if *bodyFile != "" {
 		body, err = os.ReadFile(*bodyFile)
 		if err != nil {
@@ -51,7 +64,7 @@ func main() {
 		}
 	}
 
-	headers, nonce, err := broauth.RESTHeaders(*method, *target, body)
+	headers, nonce, err := broauth.RESTHeaders(normalizedMethod, *target, body)
 	if err != nil {
 		fail("sign request: %v", err)
 	}
@@ -65,9 +78,15 @@ func main() {
 	}
 
 	requestURL := strings.TrimRight(*baseURL, "/") + *target
-	request, err := http.NewRequest(strings.ToUpper(*method), requestURL, bytes.NewReader(body))
+	request, err := http.NewRequest(normalizedMethod, requestURL, bytes.NewReader(body))
 	if err != nil {
 		fail("create request: %v", err)
+	}
+	if !isReadOnlyMethod(normalizedMethod) {
+		request.GetBody = nil
+		if request.Body == nil || request.Body == http.NoBody {
+			request.Body = io.NopCloser(bytes.NewReader(nil))
+		}
 	}
 	request.Header = headers
 
@@ -105,4 +124,13 @@ func main() {
 func fail(format string, values ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", values...)
 	os.Exit(1)
+}
+
+func isReadOnlyMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
 }

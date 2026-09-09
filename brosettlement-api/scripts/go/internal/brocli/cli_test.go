@@ -90,6 +90,64 @@ func TestAPIMutationRequiresConfirmationBeforeCredentials(t *testing.T) {
 	}
 }
 
+func TestTransactionMutationRequiresExplicitIdempotencyBeforeCredentials(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run([]string{
+		"api", "POST", "/api/v1/transactions",
+		"--confirm",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run returned %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "requires an explicit stable --idempotency-key") {
+		t.Fatalf("missing stable idempotency error: %s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "BROSETTLEMENT_API_KEY_ID") {
+		t.Fatalf("credentials were accessed before idempotency validation: %s", stderr.String())
+	}
+}
+
+func TestTransactionMutationUsesExplicitIdempotencyKeyOnce(t *testing.T) {
+	configureTestCredentials(t)
+	bodyPath := filepath.Join(t.TempDir(), "transaction.json")
+	if err := os.WriteFile(bodyPath, []byte(`{"walletId":"wallet-test","amountAtomic":"15000000"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	requestCount := 0
+	var idempotencyKey string
+	useRoundTripper(t, func(request *http.Request) (*http.Response, error) {
+		requestCount++
+		idempotencyKey = request.Header.Get("X-Idempotency-Key")
+		return &http.Response{
+			StatusCode: http.StatusForbidden,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"code":"INSUFFICIENT_SCOPE"}`)),
+		}, nil
+	})
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"api", "POST", "/api/v1/transactions",
+		"--body-file", bodyPath,
+		"--idempotency-key", "withdrawal-test-1",
+		"--confirm",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run returned %d, want 1 for HTTP 403", code)
+	}
+	if requestCount != 1 {
+		t.Fatalf("transaction mutation sent %d requests, want exactly 1", requestCount)
+	}
+	if idempotencyKey != "withdrawal-test-1" {
+		t.Fatalf("transaction idempotency key = %q, want withdrawal-test-1", idempotencyKey)
+	}
+	if !strings.Contains(stdout.String(), `"code": "INSUFFICIENT_SCOPE"`) {
+		t.Fatalf("structured API error missing from output: %s", stdout.String())
+	}
+}
+
 func TestWalletMutationUsesProductionAndDoesNotRetry(t *testing.T) {
 	configureTestCredentials(t)
 	t.Setenv("BROSETTLEMENT_ENVIRONMENT", "")
