@@ -15,6 +15,10 @@ Usage:
   brosettlement update [--auto]
   brosettlement commands [QUERY] [--json]
   brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]
+  brosettlement account create|show [options]
+  brosettlement wallet create|show|resolve [options]
+  brosettlement asset show --chain CHAIN --asset ASSET
+  brosettlement transaction status|wait --id ID [options]
   brosettlement withdraw --wallet-id ID --asset ASSET --to ADDRESS --amount-atomic AMOUNT --idempotency-key KEY --confirm
   brosettlement mpc status
   brosettlement mpc initialize --confirm [--idempotency-key KEY]
@@ -29,7 +33,8 @@ Environment:
 
 Safety:
   Mutations require --confirm and automatic HTTP transport replay is disabled.
-  Transaction creation requires an explicit stable --idempotency-key.
+  Wallet and transaction creation require explicit stable --idempotency-key values.
+  For lifecycle commands, branch on JSON state and flags; exit code alone is not finality.
   WebSocket listeners stop after 30s by default; --follow is explicitly unbounded.
 
 Run "brosettlement <command> --help" for command options.
@@ -53,6 +58,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = runCommands(args[1:], stdout, stderr)
 	case "api":
 		err = runAPI(args[1:], stdout, stderr)
+	case "account":
+		err = runAccount(args[1:], stdout, stderr)
+	case "wallet":
+		err = runWallet(args[1:], stdout, stderr)
+	case "asset":
+		err = runAsset(args[1:], stdout, stderr)
+	case "transaction", "tx":
+		err = runTransaction(args[1:], stdout, stderr)
 	case "withdraw":
 		err = runWithdraw(args[1:], stdout, stderr)
 	case "mpc":

@@ -43,7 +43,7 @@ Load existing credentials at runtime through `BROSETTLEMENT_API_KEY_ID` and
 `BROSETTLEMENT_ENVIRONMENT=production|staging`; an unset value means production. Do not copy
 credential values into source files, prompts, generated examples, or shell history.
 
-## Scope reuse and withdrawal fast path
+## Scope reuse and guarded fast paths
 
 Reuse successful operations for the same API Key ID and environment as session evidence. Account
 and wallet creation plus read-back already establish authentication and applicable wallet access;
@@ -64,6 +64,31 @@ report **withdrawal accepted; verification pending** and stop; request the read 
 verification. See [references/api.md](references/api.md#scope-evidence-and-withdrawal-execution)
 for the complete error and retry rules.
 
+For common resource operations, prefer the installed high-level CLI commands over composing
+multiple generic `api` calls:
+
+- `account create` sends one non-idempotent POST, requires a stable `externalId`, reads the result
+  back, and uses that business identifier only to reconcile a documented conflict or unknown
+  outcome. It never repeats the POST automatically.
+- `wallet create` requires a caller-supplied stable idempotency key, sends one POST, and performs
+  exactly one immediate read-back. It does not poll because the current wallet contract exposes
+  no documented non-terminal status.
+- `wallet show` reads wallet details, balances, and recent ledger entries in parallel; `wallet
+  resolve` paginates the partial-address API filter and accepts exactly one full address match.
+- `asset show` resolves one exact chain-and-asset definition, including decimals and availability.
+- `transaction status` performs one read. Use bounded `transaction wait` only when the user asks
+  to wait; never insert it into the `withdraw` fast path.
+
+These commands must not add authentication, permission, MPC, Co-Signer, balance, or WebSocket
+probes. If the installed CLI does not advertise a required high-level command, fall back to the
+generic signed API workflow instead of inventing its behavior.
+
+Treat the structured JSON as the operation result. A zero process exit means the CLI completed
+and emitted a parseable result; it does not turn `verificationPending`, `outcomeUnknown`, or a wait
+timeout into business success. Always branch on `state`, `verificationPending`, `outcomeUnknown`,
+and terminal flags before continuing an automated workflow. This avoids converting uncertainty
+into an unsafe automatic retry.
+
 ## Workflow
 
 1. Prepare the bundled CLI and run its automatic version gate as described below. Run this gate at
@@ -73,31 +98,31 @@ for the complete error and retry rules.
    never update `SKILL.md`, references, scripts, or sibling skills.
 2. Default to production and state that explicitly. Use staging only when it was explicitly
    selected or derived from the staging Console hostname.
-3. Fetch the current Swagger JSON once for the selected environment and reuse that exact document
-   for all endpoint, field, enum, scope, and error-schema decisions in the same user turn or
-   continuous onboarding session. Fetch it again only if the environment changes, the user asks
-   for a refresh, or the server reports a contract mismatch. When command discovery is necessary,
-   the reduced `commands` lister may make one separate discovery fetch before the single full-schema
-   fetch; skip discovery when the exact target is already known. Never refetch once per endpoint.
-   A released, successfully version-gated `brosettlement withdraw` command is the reviewed contract
-   implementation for its fixed create-plus-read operation. When its required inputs are already
-   resolved, invoke it directly without a `commands` call or a new Swagger download. Fetch Swagger
-   only if the command is unavailable, an input requires genuine contract discovery, or the server
-   returns a contract/access error that must be interpreted before further action.
+3. When a released, successfully version-gated high-level command has all required inputs, invoke
+   it directly without a `commands` call, authentication probe, or Swagger download. This applies
+   to `withdraw` and to the account, wallet, asset, and transaction commands advertised by the
+   installed CLI. Otherwise fetch the current Swagger JSON once for the selected environment and
+   reuse that exact document for all endpoint, field, enum, scope, and error-schema decisions in
+   the same user turn or continuous onboarding session. Fetch it again only if the environment
+   changes, the user asks for a refresh, or the server reports a contract mismatch. When command
+   discovery is genuinely necessary, the reduced `commands` lister may make one separate discovery
+   fetch before the single full-schema fetch; skip discovery when the exact target is already
+   known. Never refetch once per endpoint.
 4. Identify the exact operation, request schema, response schema, required scope, authentication headers, body-hash requirement, and idempotency requirement.
 5. Resolve credentials through the credential protocol and verify prerequisites without printing secrets.
 6. Prepare a redacted request plan: environment, method, exact target, scope, body source,
    idempotency behavior, and expected success response. Keep it internal or summarize it in one
    sentence when a calling skill defines an authorized tutorial flow; show the full plan when the
    user requests it or before other mutations.
-7. Run one safe read-only authentication probe before the first mutation when an applicable read
+7. For a generic mutation only, run one safe read-only authentication probe when an applicable read
    scope exists and no successful operation in the current session already establishes access.
-   Reuse a successful probe and subsequent successful operations for the same API key and
-   environment throughout the user turn or continuous onboarding session. Probe again only if the
-   credential, environment, or relevant access configuration changes, or an authentication/access
-   error invalidates the result. Never add a probe solely to predict whether a mutation-only scope
-   exists. After the user fixes a scope named by `INSUFFICIENT_SCOPE`, resume the identical failed
-   operation directly; do not insert an unrelated authentication probe.
+   Never add a separate probe around a released high-level command. Reuse a successful probe and
+   subsequent successful operations for the same API key and environment throughout the user turn
+   or continuous onboarding session. Probe again only if the credential, environment, or relevant
+   access configuration changes, or an authentication/access error invalidates the result. Never
+   add a probe solely to predict whether a mutation-only scope exists. After the user fixes a scope
+   named by `INSUFFICIENT_SCOPE`, resume the identical failed operation directly; do not insert an
+   unrelated authentication probe.
 8. Serialize the request body exactly once and hash the exact bytes that will be sent.
 9. Build the canonical string with the exact request target, including the raw query string.
 10. Ask for confirmation immediately before a state-changing request unless a calling skill has
@@ -182,6 +207,23 @@ surface instead of exposing the skill's internal executable path. Present comman
 
 # Signed REST request
 @brosettlement api GET '/api/v1/wallets'
+
+# Create and verify one ledger account
+@brosettlement account create --name 'Treasury' \
+  --external-id 'treasury-001' --confirm
+
+# Create and verify one wallet
+@brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
+  --idempotency-key '<stable-key>' --confirm
+
+# Read or resolve wallet data
+@brosettlement wallet show --wallet-id '<wallet-id>' --asset USDT
+@brosettlement wallet resolve --address '<exact-address>' --chain tron:nile
+
+# Resolve asset metadata and read a transaction lifecycle
+@brosettlement asset show --chain tron:nile --asset USDT
+@brosettlement transaction status --id '<transaction-id>'
+@brosettlement transaction wait --id '<transaction-id>' --timeout 30s
 
 # One withdrawal plus one immediate verification read
 @brosettlement withdraw --wallet-id '<wallet-id>' --asset USDT \
@@ -283,10 +325,10 @@ node scripts/sign-request.mjs \
 ```
 
 Send the same bytes from `--body-file`; reformatting JSON after signing invalidates the body hash and signature.
-For `POST /api/v1/transactions`, `--idempotency-key` is mandatory so a rejected or uncertain
-withdrawal can be reconciled safely without generating a different key. For other documented
-idempotent operations, the generator adds `req-<nonce>` when the option is omitted. Pass an
-explicit stable key whenever an operation may need a controlled retry.
+For `POST /api/v1/wallets` and `POST /api/v1/transactions`, `--idempotency-key` is mandatory so a
+rejected or uncertain create can be reconciled safely without generating a different key. For
+other documented idempotent operations, the generator adds `req-<nonce>` when the option is
+omitted. Pass an explicit stable key whenever an operation may need a controlled retry.
 
 ### Fast withdrawal command
 
@@ -319,6 +361,31 @@ an address to the already-known wallet ID and convert the display amount to `amo
 trusted session or API asset metadata before invoking the command. If either value is genuinely
 unknown, perform only the minimum read needed to resolve it; that resolution is not a permission
 probe.
+
+### Fast account, wallet, asset, and transaction commands
+
+Use these commands when their inputs are known:
+
+```text
+@brosettlement account create --name 'Treasury' \
+  --external-id 'treasury-001' --confirm
+
+@brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
+  --idempotency-key '<stable-key>' --confirm
+
+@brosettlement wallet show --wallet-id '<wallet-id>' --asset USDT --entries 20
+@brosettlement wallet resolve --address '<exact-address>' --chain tron:nile
+@brosettlement asset show --chain tron:nile --asset USDT
+@brosettlement transaction status --id '<transaction-id>'
+@brosettlement transaction wait --id '<transaction-id>' --timeout 30s
+```
+
+Treat `account create` reconciliation as evidence that the requested resource already exists, not
+as proof that the current POST created it. For `wallet create`, reuse the same idempotency key only
+with the identical account and chain. Accepted or outcome-unknown mutations must never be repeated
+blindly. `transaction wait` is read-only, sequential, and bounded to two minutes. Do not offer a
+generic deposit waiter: the current contract cannot always identify one deposit unambiguously from
+wallet, asset, amount, and time alone.
 
 ## Listen to WebSocket events
 

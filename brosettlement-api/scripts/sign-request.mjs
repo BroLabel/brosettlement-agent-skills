@@ -27,10 +27,11 @@ if (!method || !target) {
   fail("Usage: sign-request.mjs --method METHOD --target /exact/path?query [--body-file FILE] [--idempotency-key VALUE] [--timestamp UNIX_SECONDS] [--nonce VALUE]");
 }
 if (!target.startsWith("/")) fail("--target must be the exact request target beginning with /");
-if (method === "POST" && target.split("?", 1)[0] === "/api/v1/transactions") {
+const requestPath = target.split("?", 1)[0];
+if (method === "POST" && ["/api/v1/wallets", "/api/v1/transactions"].includes(requestPath)) {
   explicitIdempotencyKey = explicitIdempotencyKey?.trim();
   if (!explicitIdempotencyKey) {
-    fail("POST /api/v1/transactions requires an explicit stable --idempotency-key");
+    fail(`POST ${requestPath} requires an explicit stable --idempotency-key`);
   }
   if (Buffer.byteLength(explicitIdempotencyKey, "ascii") > 128) {
     fail("--idempotency-key must be at most 128 ASCII bytes");

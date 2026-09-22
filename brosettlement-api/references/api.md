@@ -25,11 +25,12 @@ document for the continuous onboarding session. Refresh only after an environmen
 explicit refresh request, or a server response that demonstrates contract drift; do not fetch once
 per endpoint. If the exact target is unknown, the reduced `commands` lister may perform one
 separate discovery fetch before the single full-document fetch. Skip discovery when the target is
-already known. A released, version-gated `brosettlement withdraw` command is a reviewed
-implementation of its fixed create-plus-read contract and may run directly when all required
-inputs are resolved. Fetch live OpenAPI afterward only when the command is unavailable, an input
-genuinely requires contract discovery, or an API error demonstrates that the reviewed contract
-must be rechecked.
+already known. A released, version-gated high-level CLI command is a reviewed implementation of
+its fixed contract and may run directly when all required inputs are resolved. This includes
+`withdraw` and the account, wallet, asset, and transaction commands advertised by the installed
+CLI. Fetch live OpenAPI afterward only when the command is unavailable, an input genuinely
+requires contract discovery, or an API error demonstrates that the reviewed contract must be
+rechecked.
 
 ## REST authentication
 
@@ -191,14 +192,18 @@ Run from `scripts/go`:
 |---|---|
 | `go run ./cmd/brosettlement commands [QUERY] [--json]` | Fetch Swagger and list or search current API operations. |
 | `go run ./cmd/brosettlement api METHOD TARGET [options]` | Sign and send an exact REST request; mutations require `--confirm`. |
+| `go run ./cmd/brosettlement account create\|show [options]` | Create one account with external-ID reconciliation, or read one account. |
+| `go run ./cmd/brosettlement wallet create\|show\|resolve [options]` | Create and verify a wallet, read its views in parallel, or resolve an exact address. |
+| `go run ./cmd/brosettlement asset show --chain CHAIN --asset ASSET` | Resolve exact asset metadata across cursor pages. |
+| `go run ./cmd/brosettlement transaction status\|wait --id ID [options]` | Read once or wait sequentially for a bounded transaction lifecycle. |
 | `go run ./cmd/brosettlement withdraw [options]` | Submit one exact withdrawal and perform one immediate read-back in the same process. |
 | `go run ./cmd/brosettlement mpc status` | Read the current MPC and chain readiness status. |
 | `go run ./cmd/brosettlement mpc initialize --confirm [options]` | Send the verified staging-compatible idempotent initialization request. |
 | `go run ./cmd/brosettlement websocket listen --stop-after 30s [options]` | Run a bounded synchronous listener, reconnect as needed, and record events as JSONL. |
 
-`POST /api/v1/transactions` requires an explicit stable `--idempotency-key`; the CLI does not
-generate a throwaway key for transaction creation. This preserves the exact logical request for
-scope-fix retries and unknown-outcome reconciliation.
+`POST /api/v1/wallets` and `POST /api/v1/transactions` require an explicit stable
+`--idempotency-key`; the CLI does not generate a throwaway key for either create. This preserves
+the exact logical request for scope-fix retries and unknown-outcome reconciliation.
 
 The guarded high-level form is:
 
@@ -211,6 +216,35 @@ go run ./cmd/brosettlement withdraw \
   --idempotency-key '<stable-key>' \
   --confirm
 ```
+
+Other guarded high-level forms are:
+
+```bash
+go run ./cmd/brosettlement account create \
+  --name 'Treasury' --external-id 'treasury-001' --confirm
+
+go run ./cmd/brosettlement wallet create \
+  --account-id '<account-id>' --chain tron:nile \
+  --idempotency-key '<stable-key>' --confirm
+
+go run ./cmd/brosettlement wallet show --wallet-id '<wallet-id>' --asset USDT
+go run ./cmd/brosettlement wallet resolve --address '<address>' --chain tron:nile
+go run ./cmd/brosettlement asset show --chain tron:nile --asset USDT
+go run ./cmd/brosettlement transaction status --id '<transaction-id>'
+go run ./cmd/brosettlement transaction wait --id '<transaction-id>' --timeout 30s
+```
+
+`account create` has no server idempotency contract. Its high-level command therefore requires a
+stable external ID, sends one POST only, and uses exact external-ID lookup plus read-back to
+reconcile conflicts or uncertain outcomes. `wallet create` requires an explicit stable
+idempotency key, never substitutes a generated throwaway key, and performs one immediate read-back
+without polling an undocumented wallet state. Resolver commands exhaust cursor pages before
+deciding uniqueness. Transaction waiting is sequential, uses a fresh signature per GET, and has a
+hard two-minute limit. No high-level command performs unrelated access probes.
+For structured lifecycle commands, process exit success only means that the command completed and
+emitted JSON. Callers must inspect `state`, `verificationPending`, `outcomeUnknown`, and terminal
+flags; pending, timed-out, or uncertain JSON must stop the workflow and must not trigger a blind
+mutation retry.
 
 Optional `--client-reference` and TRON `--fee-limit-sun` values are included only when explicitly
 resolved. The command accepts only the official production or staging API origin, uses one HTTP
@@ -253,21 +287,23 @@ the current turn.
 
 ## Controlled test ladder
 
-1. Except for the released, version-gated `brosettlement withdraw` fast path described above, fetch
-   the current integration OpenAPI document once for the selected environment and reuse it for this
-   turn or continuous onboarding session. Do not fetch it before that fast path when all withdrawal
-   inputs are already resolved.
-2. Select the operation and record method, exact target, required scope, body schema, success
-   response, body-hash rule, and idempotency rule.
+1. Invoke a released, successfully version-gated high-level account, wallet, asset, transaction, or
+   withdrawal command directly when all of its required inputs are resolved. Do not add a
+   `commands` lookup, Swagger download, or authentication probe around it. For an operation without
+   such a command, fetch the current integration OpenAPI document once for the selected environment
+   and reuse it for this turn or continuous onboarding session.
+2. For a generic operation, select it from that one contract and record method, exact target,
+   required scope, body schema, success response, body-hash rule, and idempotency rule. The released
+   high-level commands already encapsulate this review for their fixed operations.
 3. Confirm API Key ID and the local private-key file path. Request scope/settings confirmation only
    for a new or changed key, or after a current access error; reuse successful session evidence
    instead of asking again.
-4. If no successful operation in the current key/environment session already establishes access,
-   run one applicable read-only probe to validate the signature, timestamp, nonce, key status, and
-   allowlist before the first mutation. Reuse that result unless a relevant configuration change
-   or server error invalidates it. Never add a probe merely to predict a mutation-only scope. After
-   a user fixes the exact scope named by `INSUFFICIENT_SCOPE`, retry that failed operation directly
-   rather than inserting an unrelated probe.
+4. For a generic mutation only, if no successful operation in the current key/environment session
+   already establishes access, run one applicable read-only probe to validate the signature,
+   timestamp, nonce, key status, and allowlist. Reuse that result unless a relevant configuration
+   change or server error invalidates it. Never add a probe merely to predict a mutation-only scope.
+   After a user fixes the exact scope named by `INSUFFICIENT_SCOPE`, retry that failed operation
+   directly rather than inserting an unrelated probe.
 5. Show a redacted mutation plan and obtain confirmation unless the current user instruction itself
    unambiguously authorizes the exact operation or a calling skill has captured explicit standing
    authorization. The onboarding tutorial may
@@ -278,10 +314,13 @@ the current turn.
    destructive actions, or additional resources. An explicit request containing the exact source,
    destination, asset, amount, and network authorizes only that one withdrawal and requires no
    duplicate confirmation. Using the production API does not itself mean mainnet.
-6. Send the mutation once with a stable idempotency key. For a resolved withdrawal, use
-   `brosettlement withdraw` so the single POST and single immediate GET occur in one tool call.
-7. Verify the resulting resource or lifecycle through REST and, outside the withdrawal fast path,
-   relevant WebSocket events. Return
+6. Send the mutation once. Use a caller-supplied stable idempotency key whenever the contract
+   supports or requires it. Account creation has no server idempotency contract, so its high-level
+   command instead requires a stable external ID and never repeats the POST. Use the corresponding
+   high-level command so its mutation and fixed read-back stay within one process.
+7. Let a high-level command own its documented read-back; do not repeat it outside the command. For
+   a generic operation, verify the resulting resource or lifecycle through REST and, when relevant,
+   bounded WebSocket observation. Return
    the sanitized API response and identifiers, and claim terminal success only after read-back
    succeeds. If the mutation was accepted but read-back lacks its read scope, report the accepted
    result and verification as pending, ask only for that read scope, and never repeat the mutation.

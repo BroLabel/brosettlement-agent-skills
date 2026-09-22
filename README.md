@@ -70,8 +70,8 @@ modified skill without an explicit user request.
 
 ## Unified Go CLI
 
-The API skill includes one CLI for contract discovery, signed REST calls, guarded withdrawals,
-MPC operations, and WebSocket events:
+The API skill includes one CLI for contract discovery, signed REST calls, fast account/wallet
+workflows, guarded withdrawals, bounded lifecycle reads, MPC operations, and WebSocket events:
 
 Use the portable command surface in an AI chat:
 
@@ -86,6 +86,19 @@ Use the portable command surface in an AI chat:
 # Signed REST request
 @brosettlement api GET '/api/v1/wallets'
 
+# Create and verify resources without extra probes
+@brosettlement account create --name 'Treasury' \
+  --external-id 'treasury-001' --confirm
+@brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
+  --idempotency-key '<stable-key>' --confirm
+
+# Fast read and resolution commands
+@brosettlement wallet show --wallet-id '<wallet-id>' --asset USDT
+@brosettlement wallet resolve --address '<exact-address>' --chain tron:nile
+@brosettlement asset show --chain tron:nile --asset USDT
+@brosettlement transaction status --id '<transaction-id>'
+@brosettlement transaction wait --id '<transaction-id>' --timeout 30s
+
 # Submit one withdrawal and verify it once
 @brosettlement withdraw --wallet-id '<wallet-id>' --asset USDT \
   --to '<destination>' --amount-atomic '6000000' \
@@ -98,6 +111,10 @@ Use the portable command surface in an AI chat:
 @brosettlement websocket listen --stop-after 30s
 ```
 
+Automation must inspect the returned JSON lifecycle fields, not only the process exit code. In
+particular, `verificationPending`, `outcomeUnknown`, or a timeout state must stop the workflow and
+must never cause an automatic mutation retry.
+
 The agent resolves `@brosettlement` to the verified bundled executable. For direct shell use,
 build or invoke the native path:
 
@@ -109,6 +126,12 @@ cd brosettlement-api
 ./scripts/go/bin/brosettlement version
 ./scripts/go/bin/brosettlement commands wallets --json
 ./scripts/go/bin/brosettlement api GET /api/v1/mpc/status
+./scripts/go/bin/brosettlement account create --name 'Treasury' \
+  --external-id 'treasury-001' --confirm
+./scripts/go/bin/brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
+  --idempotency-key '<stable-key>' --confirm
+./scripts/go/bin/brosettlement wallet show --wallet-id '<wallet-id>' --asset USDT
+./scripts/go/bin/brosettlement transaction status --id '<transaction-id>'
 ./scripts/go/bin/brosettlement withdraw --wallet-id '<wallet-id>' --asset USDT \
   --to '<destination>' --amount-atomic '6000000' \
   --idempotency-key '<stable-key>' --confirm
@@ -142,8 +165,9 @@ yes/no question again:
   --confirm
 ```
 
-Transaction creation additionally requires an explicit stable `--idempotency-key`. This lets the
-agent reconcile an access error or uncertain response without risking a second logical transfer.
+Wallet and transaction creation additionally require an explicit stable `--idempotency-key`. This
+lets the agent reconcile an access error or uncertain response without risking a second logical
+operation.
 The high-level `withdraw` command keeps the create and one immediate verification read in a single
 CLI process, reports per-stage timings, accepts only the official production or staging API
 origin, and never polls or retries the mutation. Transport failures and HTTP 5xx responses are

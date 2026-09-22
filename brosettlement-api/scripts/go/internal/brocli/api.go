@@ -2,7 +2,6 @@ package brocli
 
 import (
 	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -38,7 +37,7 @@ func runAPI(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(stdout, "Usage: brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]")
 		fmt.Fprintln(stdout, "Non-read-only methods require --confirm.")
-		fmt.Fprintln(stdout, "POST /api/v1/transactions requires an explicit stable --idempotency-key.")
+		fmt.Fprintln(stdout, "POST /api/v1/wallets and POST /api/v1/transactions require an explicit stable --idempotency-key.")
 		fmt.Fprintln(stdout, "Non-read-only methods are sent once; automatic HTTP transport replay is disabled.")
 		return errHelp
 	}
@@ -155,62 +154,23 @@ func executeAPI(options apiOptions, stdout io.Writer) error {
 		}
 	}
 
-	headers, nonce, err := broauth.RESTHeaders(options.method, options.target, body)
+	result, err := sendSignedAPIRequest(
+		newHTTPClient(options.timeout),
+		options.baseURL,
+		strings.ToUpper(options.method),
+		options.target,
+		body,
+		options.idempotencyKey,
+		!isReadOnlyMethod(options.method),
+	)
 	if err != nil {
-		return fmt.Errorf("sign request: %w", err)
+		return err
 	}
-	if len(body) > 0 {
-		headers.Set("Content-Type", "application/json")
+	if err := writeJSON(stdout, result, "API"); err != nil {
+		return err
 	}
-	if options.idempotencyKey != "" {
-		headers.Set("X-Idempotency-Key", options.idempotencyKey)
-	} else if broauth.RequiresIdempotency(options.method, options.target) {
-		headers.Set("X-Idempotency-Key", "req-"+nonce)
-	}
-
-	requestURL := strings.TrimRight(options.baseURL, "/") + options.target
-	request, err := http.NewRequest(strings.ToUpper(options.method), requestURL, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-	if !isReadOnlyMethod(options.method) {
-		// net/http may transparently replay requests carrying an idempotency
-		// header after some reused-connection failures. Mutations are deliberately
-		// single-attempt so an uncertain result can be reconciled before retrying.
-		request.GetBody = nil
-		if request.Body == nil || request.Body == http.NoBody {
-			request.Body = io.NopCloser(bytes.NewReader(nil))
-		}
-	}
-	request.Header = headers
-	response, err := newHTTPClient(options.timeout).Do(request)
-	if err != nil {
-		return fmt.Errorf("send request: %w", err)
-	}
-	defer response.Body.Close()
-	responseBody, err := io.ReadAll(response.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-
-	var parsedBody interface{}
-	if len(responseBody) > 0 {
-		if err := json.Unmarshal(responseBody, &parsedBody); err != nil {
-			parsedBody = string(responseBody)
-		}
-	}
-	result := apiOutput{
-		StatusCode: response.StatusCode,
-		RequestID:  response.Header.Get("X-Request-Id"),
-		Body:       parsedBody,
-	}
-	encoded, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode output: %w", err)
-	}
-	fmt.Fprintln(stdout, string(encoded))
-	if response.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf("API returned HTTP %d", response.StatusCode)
+	if result.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("API returned HTTP %d", result.StatusCode)
 	}
 	return nil
 }

@@ -181,6 +181,7 @@ func TestWalletMutationUsesProductionAndDoesNotRetry(t *testing.T) {
 	code := Run([]string{
 		"api", "POST", "/api/v1/wallets",
 		"--body-file", bodyPath,
+		"--idempotency-key", "wallet-create-test-1",
 		"--confirm",
 	}, &stdout, &stderr)
 	if code != 1 {
@@ -195,14 +196,39 @@ func TestWalletMutationUsesProductionAndDoesNotRetry(t *testing.T) {
 	if requestBody != `{"accountId":"account-test","network":"TRON_NILE"}` {
 		t.Fatalf("wallet mutation changed request body: %q", requestBody)
 	}
-	if !strings.HasPrefix(idempotencyKey, "req-") {
-		t.Fatalf("wallet mutation missing generated idempotency key: %q", idempotencyKey)
+	if idempotencyKey != "wallet-create-test-1" {
+		t.Fatalf("wallet mutation idempotency key = %q, want wallet-create-test-1", idempotencyKey)
 	}
 	if !requestBodyPresent {
 		t.Fatal("wallet mutation request body is absent")
 	}
 	if !transportReplayDisabled {
 		t.Fatal("wallet mutation allows automatic HTTP transport replay: GetBody is non-nil")
+	}
+}
+
+func TestGenericWalletMutationRequiresExplicitStableKey(t *testing.T) {
+	t.Setenv("BROSETTLEMENT_API_KEY_ID", "")
+	t.Setenv("BROSETTLEMENT_API_PRIVATE_KEY_FILE", "")
+	bodyPath := filepath.Join(t.TempDir(), "wallet.json")
+	if err := os.WriteFile(bodyPath, []byte(`{"accountId":"account-test","chain":"tron:nile"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{
+		"api", "POST", "/api/v1/wallets",
+		"--body-file", bodyPath,
+		"--confirm",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run returned %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "requires an explicit stable --idempotency-key") {
+		t.Fatalf("missing stable key error: %s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "BROSETTLEMENT_API_KEY_ID") {
+		t.Fatalf("credentials were accessed before idempotency validation: %s", stderr.String())
 	}
 }
 

@@ -1,7 +1,6 @@
 package brocli
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -92,18 +91,6 @@ type withdrawOutput struct {
 	VerificationResponse *apiOutput        `json:"verificationResponse,omitempty"`
 	Error                *withdrawError    `json:"error,omitempty"`
 	DurationMS           withdrawDurations `json:"durationMs"`
-}
-
-type withdrawOutcomeUnknownError struct {
-	err error
-}
-
-func (err *withdrawOutcomeUnknownError) Error() string {
-	return err.err.Error()
-}
-
-func (err *withdrawOutcomeUnknownError) Unwrap() error {
-	return err.err
 }
 
 func runWithdraw(args []string, stdout, stderr io.Writer) error {
@@ -244,14 +231,10 @@ func validateAPIBaseURL(rawURL string) error {
 func executeWithdraw(options withdrawOptions, body []byte, stdout io.Writer) error {
 	totalStart := time.Now()
 	result := withdrawOutput{State: "creating"}
-	client := newHTTPClient(options.timeout)
-	// Redirects would turn one logical call into additional HTTP requests.
-	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
+	client := newFastPathHTTPClient(options.timeout)
 
 	createStart := time.Now()
-	createResponse, err := sendWithdrawAPIRequest(
+	createResponse, err := sendSignedAPIRequest(
 		client,
 		options.baseURL,
 		http.MethodPost,
@@ -264,7 +247,7 @@ func executeWithdraw(options withdrawOptions, body []byte, stdout io.Writer) err
 	if err != nil {
 		result.Error = &withdrawError{Stage: "create", Message: err.Error()}
 		result.DurationMS.Total = time.Since(totalStart).Milliseconds()
-		var outcomeUnknown *withdrawOutcomeUnknownError
+		var outcomeUnknown *requestOutcomeUnknownError
 		if errors.As(err, &outcomeUnknown) {
 			result.OutcomeUnknown = true
 			result.VerificationPending = true
@@ -336,7 +319,7 @@ func executeWithdraw(options withdrawOptions, body []byte, stdout io.Writer) err
 
 	verificationTarget := "/api/v1/transactions/" + url.PathEscape(transactionID)
 	verificationStart := time.Now()
-	verificationResponse, err := sendWithdrawAPIRequest(
+	verificationResponse, err := sendSignedAPIRequest(
 		client,
 		options.baseURL,
 		http.MethodGet,
@@ -390,68 +373,6 @@ func executeWithdraw(options withdrawOptions, body []byte, stdout io.Writer) err
 	return writeWithdrawOutput(stdout, result)
 }
 
-func sendWithdrawAPIRequest(
-	client *http.Client,
-	baseURL string,
-	method string,
-	target string,
-	body []byte,
-	idempotencyKey string,
-	mutation bool,
-) (apiOutput, error) {
-	headers, _, err := broauth.RESTHeaders(method, target, body)
-	if err != nil {
-		return apiOutput{}, fmt.Errorf("sign request: %w", err)
-	}
-	if len(body) > 0 {
-		headers.Set("Content-Type", "application/json")
-	}
-	if idempotencyKey != "" {
-		headers.Set("X-Idempotency-Key", idempotencyKey)
-	}
-
-	requestURL := strings.TrimRight(baseURL, "/") + target
-	request, err := http.NewRequest(method, requestURL, bytes.NewReader(body))
-	if err != nil {
-		return apiOutput{}, fmt.Errorf("create request: %w", err)
-	}
-	if mutation {
-		// A non-nil body with no GetBody prevents net/http from replaying this
-		// state-changing request after a reused-connection failure.
-		request.GetBody = nil
-		if request.Body == nil || request.Body == http.NoBody {
-			request.Body = io.NopCloser(bytes.NewReader(nil))
-		}
-	}
-	request.Header = headers
-
-	response, err := client.Do(request)
-	if err != nil {
-		return apiOutput{}, &withdrawOutcomeUnknownError{
-			err: fmt.Errorf("send request: %w", err),
-		}
-	}
-	defer response.Body.Close()
-	responseBody, err := io.ReadAll(response.Body)
-	if err != nil {
-		return apiOutput{}, &withdrawOutcomeUnknownError{
-			err: fmt.Errorf("read response: %w", err),
-		}
-	}
-
-	var parsedBody interface{}
-	if len(responseBody) > 0 {
-		if err := json.Unmarshal(responseBody, &parsedBody); err != nil {
-			parsedBody = string(responseBody)
-		}
-	}
-	return apiOutput{
-		StatusCode: response.StatusCode,
-		RequestID:  response.Header.Get("X-Request-Id"),
-		Body:       parsedBody,
-	}, nil
-}
-
 func transactionStringField(body interface{}, key string) string {
 	object, ok := body.(map[string]interface{})
 	if !ok {
@@ -493,12 +414,5 @@ func isKnownTransactionStatus(status string) bool {
 }
 
 func writeWithdrawOutput(stdout io.Writer, result withdrawOutput) error {
-	encoded, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode withdrawal output: %w", err)
-	}
-	if _, err := fmt.Fprintln(stdout, string(encoded)); err != nil {
-		return fmt.Errorf("write withdrawal output: %w", err)
-	}
-	return nil
+	return writeJSON(stdout, result, "withdrawal")
 }

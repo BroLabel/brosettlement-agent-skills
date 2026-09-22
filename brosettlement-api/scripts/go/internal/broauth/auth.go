@@ -158,15 +158,21 @@ func RequiresIdempotency(method, requestTarget string) bool {
 }
 
 func RequiresExplicitIdempotencyKey(method, requestTarget string) bool {
-	return strings.ToUpper(method) == http.MethodPost &&
-		requestPath(requestTarget) == "/api/v1/transactions"
+	if strings.ToUpper(method) != http.MethodPost {
+		return false
+	}
+	path := requestPath(requestTarget)
+	return path == "/api/v1/transactions" || path == "/api/v1/wallets"
 }
 
 func NormalizeExplicitIdempotencyKey(method, requestTarget, value string) (string, error) {
 	if !RequiresExplicitIdempotencyKey(method, requestTarget) {
 		return value, nil
 	}
+	return NormalizeStableIdempotencyKey(value)
+}
 
+func NormalizeStableIdempotencyKey(value string) (string, error) {
 	normalized := strings.TrimSpace(value)
 	if normalized == "" {
 		return "", errors.New("requires an explicit stable --idempotency-key")
