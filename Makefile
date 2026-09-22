@@ -21,6 +21,7 @@ validate:
 	@grep -q '0.0.0.0/0' brosettlement-onboarding/SKILL.md
 	@grep -q 'must never be used' brosettlement-onboarding/SKILL.md
 	@grep -q 'brosettlement update --auto' brosettlement-api/SKILL.md
+	@grep -q 'brosettlement withdraw' brosettlement-api/SKILL.md
 	@grep -q 'never update `SKILL.md`' brosettlement-api/SKILL.md
 	@test -x brosettlement-api/scripts/build-cli.sh
 	@test -f brosettlement-disaster-recovery/scripts/recovery-tron-sign.go

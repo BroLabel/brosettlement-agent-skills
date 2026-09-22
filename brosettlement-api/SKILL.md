@@ -51,8 +51,11 @@ do not repeat generic auth, wallet, balance, transaction-list, Co-Signer, or MPC
 predict withdrawal scopes.
 
 An exact user instruction that resolves the source wallet, network, asset, amount, and destination
-authorizes that one withdrawal. Pass `--confirm`, require an explicit stable `--idempotency-key`,
-and submit once without a permission-probe GET or duplicate question. On `403 INSUFFICIENT_SCOPE`,
+authorizes that one withdrawal. Prefer the guarded `brosettlement withdraw` command, pass
+`--confirm`, require an explicit stable `--idempotency-key`, and submit once without a
+permission-probe GET or duplicate question. The command performs the accepted create and exactly
+one immediate read-back in a single CLI invocation; do not repeat either request outside it. On
+`403 INSUFFICIENT_SCOPE`,
 request only the write scope named by current Swagger and stop. Treat `IP_NOT_ALLOWED` as an
 allowlist issue. After an accepted create, report its sanitized response and ID, then verify only
 that ID with one immediate GET. If it is non-terminal or the GET returns `403 INSUFFICIENT_SCOPE`,
@@ -76,6 +79,11 @@ for the complete error and retry rules.
    for a refresh, or the server reports a contract mismatch. When command discovery is necessary,
    the reduced `commands` lister may make one separate discovery fetch before the single full-schema
    fetch; skip discovery when the exact target is already known. Never refetch once per endpoint.
+   A released, successfully version-gated `brosettlement withdraw` command is the reviewed contract
+   implementation for its fixed create-plus-read operation. When its required inputs are already
+   resolved, invoke it directly without a `commands` call or a new Swagger download. Fetch Swagger
+   only if the command is unavailable, an input requires genuine contract discovery, or the server
+   returns a contract/access error that must be interpreted before further action.
 4. Identify the exact operation, request schema, response schema, required scope, authentication headers, body-hash requirement, and idempotency requirement.
 5. Resolve credentials through the credential protocol and verify prerequisites without printing secrets.
 6. Prepare a redacted request plan: environment, method, exact target, scope, body source,
@@ -174,6 +182,11 @@ surface instead of exposing the skill's internal executable path. Present comman
 
 # Signed REST request
 @brosettlement api GET '/api/v1/wallets'
+
+# One withdrawal plus one immediate verification read
+@brosettlement withdraw --wallet-id '<wallet-id>' --asset USDT \
+  --to '<destination>' --amount-atomic '6000000' \
+  --idempotency-key '<stable-key>' --confirm
 
 # MPC status
 @brosettlement mpc status
@@ -274,6 +287,38 @@ For `POST /api/v1/transactions`, `--idempotency-key` is mandatory so a rejected 
 withdrawal can be reconciled safely without generating a different key. For other documented
 idempotent operations, the generator adds `req-<nonce>` when the option is omitted. Pass an
 explicit stable key whenever an operation may need a controlled retry.
+
+### Fast withdrawal command
+
+For an exact authorized withdrawal whose wallet ID and atomic amount are already resolved, use one
+guarded invocation instead of separate shell or tool calls:
+
+```text
+@brosettlement withdraw --wallet-id '<wallet-id>' --asset USDT \
+  --to '<destination>' --amount-atomic '6000000' \
+  --idempotency-key '<stable-key>' --confirm
+```
+
+Add `--client-reference '<reference>'` only when the caller needs one. For TRON, add
+`--fee-limit-sun '<sun>'` only when that exact fee limit was resolved from the current operation
+context. The command serializes one `CreateTransactionDto`, sends it once, extracts the returned
+transaction ID, and performs one immediate `GET /api/v1/transactions/{id}` with the same HTTP
+client. It returns the create response, verification response or error, and per-stage durations as
+one JSON document. It never probes permissions, balances, wallets, Co-Signer, MPC, or WebSocket;
+never polls; and never retries the mutation.
+
+The guarded command accepts only the official production or staging API origin; do not relay a
+signed withdrawal through a custom host. If transport failure, response-read failure, or HTTP 5xx
+makes the create result uncertain, it returns `state: "create_outcome_unknown"` with
+`outcomeUnknown: true` and a non-retry exit. Do not repeat the POST blindly; reconcile the stable
+idempotency key and transaction state first.
+
+If the create is accepted but verification is non-terminal or unavailable, treat the mutation as
+accepted and report **withdrawal accepted; verification pending**. Never repeat the POST. Resolve
+an address to the already-known wallet ID and convert the display amount to `amountAtomic` from
+trusted session or API asset metadata before invoking the command. If either value is genuinely
+unknown, perform only the minimum read needed to resolve it; that resolution is not a permission
+probe.
 
 ## Listen to WebSocket events
 

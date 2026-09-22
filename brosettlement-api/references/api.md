@@ -11,7 +11,7 @@
 - Production base URL (default): `https://brosettlement-api.brolabel.io`
 - Staging base URL: `https://brosettlement-staging-api.brolabel.io`
 - REST prefix: `/api/v1`
-- Production endpoint and OpenAPI metadata verified: 2026-09-09
+- Production endpoint and OpenAPI transaction metadata verified: 2026-09-22
 
 The CLI defaults to production. Set `BROSETTLEMENT_ENVIRONMENT=staging` only for the staging
 environment. Fetch the selected environment's OpenAPI document whenever current fields, commands,
@@ -25,7 +25,11 @@ document for the continuous onboarding session. Refresh only after an environmen
 explicit refresh request, or a server response that demonstrates contract drift; do not fetch once
 per endpoint. If the exact target is unknown, the reduced `commands` lister may perform one
 separate discovery fetch before the single full-document fetch. Skip discovery when the target is
-already known.
+already known. A released, version-gated `brosettlement withdraw` command is a reviewed
+implementation of its fixed create-plus-read contract and may run directly when all required
+inputs are resolved. Fetch live OpenAPI afterward only when the command is unavailable, an input
+genuinely requires contract discovery, or an API error demonstrates that the reviewed contract
+must be rechecked.
 
 ## REST authentication
 
@@ -144,7 +148,7 @@ Use the current OpenAPI description and public documentation for the complete ha
 
 ## Scope evidence and withdrawal execution
 
-The production Integration OpenAPI verified on 2026-09-09 does not expose a signed endpoint that
+The production Integration OpenAPI verified on 2026-09-22 does not expose a signed endpoint that
 returns the current API key's complete scope set. It defines `withdrawals:create` for
 `POST /api/v1/transactions` and `transactions:read` for transaction read endpoints. A successful
 read proves only the scope required by that read; it cannot prove a mutation-only scope.
@@ -157,8 +161,9 @@ probe solely because the next operation is a withdrawal.
 For an exact withdrawal explicitly requested by the user:
 
 1. Reuse the known API environment, key, source wallet, and established session checkpoints.
-2. Treat the exact request as authorization and submit `POST /api/v1/transactions` once with a
-   stable idempotency key; do not preflight `transactions:read`.
+2. Treat the exact request as authorization and invoke `brosettlement withdraw` once with the
+   resolved wallet ID, asset, destination, atomic amount, stable idempotency key, and `--confirm`;
+   do not preflight `transactions:read`. The command owns the single POST and immediate GET.
 3. On `403 INSUFFICIENT_SCOPE`, identify `withdrawals:create` from the current Swagger, give the
    user manual Console instructions, and stop. After the user confirms the access change, retry
    only the identical request with the same key; do not insert another authentication probe.
@@ -186,6 +191,7 @@ Run from `scripts/go`:
 |---|---|
 | `go run ./cmd/brosettlement commands [QUERY] [--json]` | Fetch Swagger and list or search current API operations. |
 | `go run ./cmd/brosettlement api METHOD TARGET [options]` | Sign and send an exact REST request; mutations require `--confirm`. |
+| `go run ./cmd/brosettlement withdraw [options]` | Submit one exact withdrawal and perform one immediate read-back in the same process. |
 | `go run ./cmd/brosettlement mpc status` | Read the current MPC and chain readiness status. |
 | `go run ./cmd/brosettlement mpc initialize --confirm [options]` | Send the verified staging-compatible idempotent initialization request. |
 | `go run ./cmd/brosettlement websocket listen --stop-after 30s [options]` | Run a bounded synchronous listener, reconnect as needed, and record events as JSONL. |
@@ -193,6 +199,27 @@ Run from `scripts/go`:
 `POST /api/v1/transactions` requires an explicit stable `--idempotency-key`; the CLI does not
 generate a throwaway key for transaction creation. This preserves the exact logical request for
 scope-fix retries and unknown-outcome reconciliation.
+
+The guarded high-level form is:
+
+```bash
+go run ./cmd/brosettlement withdraw \
+  --wallet-id '<wallet-id>' \
+  --asset USDT \
+  --to '<destination>' \
+  --amount-atomic '6000000' \
+  --idempotency-key '<stable-key>' \
+  --confirm
+```
+
+Optional `--client-reference` and TRON `--fee-limit-sun` values are included only when explicitly
+resolved. The command accepts only the official production or staging API origin, uses one HTTP
+client, never retries the POST, performs at most one GET by the returned transaction ID, and
+returns structured create and verification responses plus stage timings. An accepted POST remains
+accepted when the GET is non-terminal or fails; the caller must report verification pending and
+must not repeat the mutation. A transport failure, response-read failure, or HTTP 5xx after the
+create attempt returns `state: "create_outcome_unknown"` and `outcomeUnknown: true`; treat this as
+a non-retry result and reconcile before considering any further create request.
 
 Build a reusable binary after creating `./bin`:
 
@@ -226,8 +253,10 @@ the current turn.
 
 ## Controlled test ladder
 
-1. Fetch the current integration OpenAPI document once for the selected environment and reuse it
-   for this turn or continuous onboarding session.
+1. Except for the released, version-gated `brosettlement withdraw` fast path described above, fetch
+   the current integration OpenAPI document once for the selected environment and reuse it for this
+   turn or continuous onboarding session. Do not fetch it before that fast path when all withdrawal
+   inputs are already resolved.
 2. Select the operation and record method, exact target, required scope, body schema, success
    response, body-hash rule, and idempotency rule.
 3. Confirm API Key ID and the local private-key file path. Request scope/settings confirmation only
@@ -249,8 +278,10 @@ the current turn.
    destructive actions, or additional resources. An explicit request containing the exact source,
    destination, asset, amount, and network authorizes only that one withdrawal and requires no
    duplicate confirmation. Using the production API does not itself mean mainnet.
-6. Send the mutation once with a stable idempotency key.
-7. Verify the resulting resource or lifecycle through REST and relevant WebSocket events. Return
+6. Send the mutation once with a stable idempotency key. For a resolved withdrawal, use
+   `brosettlement withdraw` so the single POST and single immediate GET occur in one tool call.
+7. Verify the resulting resource or lifecycle through REST and, outside the withdrawal fast path,
+   relevant WebSocket events. Return
    the sanitized API response and identifiers, and claim terminal success only after read-back
    succeeds. If the mutation was accepted but read-back lacks its read scope, report the accepted
    result and verification as pending, ask only for that read scope, and never repeat the mutation.

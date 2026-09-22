@@ -15,6 +15,7 @@ Usage:
   brosettlement update [--auto]
   brosettlement commands [QUERY] [--json]
   brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]
+  brosettlement withdraw --wallet-id ID --asset ASSET --to ADDRESS --amount-atomic AMOUNT --idempotency-key KEY --confirm
   brosettlement mpc status
   brosettlement mpc initialize --confirm [--idempotency-key KEY]
   brosettlement websocket listen [--log-path FILE] [--stop-after DURATION | --follow]
@@ -52,6 +53,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = runCommands(args[1:], stdout, stderr)
 	case "api":
 		err = runAPI(args[1:], stdout, stderr)
+	case "withdraw":
+		err = runWithdraw(args[1:], stdout, stderr)
 	case "mpc":
 		err = runMPC(args[1:], stdout, stderr)
 	case "websocket", "ws":

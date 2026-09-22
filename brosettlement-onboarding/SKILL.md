@@ -116,7 +116,8 @@ to resume onboarding.
 
 For a routine withdrawal after this onboarding, reuse the same key/environment session evidence,
 resolved wallet, and successful account/wallet checkpoints. Route the exact request through the
-companion skill's withdrawal fast path; do not repeat permission probes or confirmation questions.
+companion skill's single-call `brosettlement withdraw` fast path; do not repeat permission probes,
+Swagger discovery, create/read requests, or confirmation questions outside that command.
 
 The mandatory first-account question and full ordered sequence below apply only to a new onboarding
 whose state cannot be recovered safely from the current conversation or existing configuration.
@@ -542,13 +543,21 @@ After MPC readiness:
     - do not call `POST /api/v1/transactions` for a deposit; that endpoint creates an outgoing
       transaction.
 12. Offer a small withdrawal separately. Once the source wallet, network, asset, amount, and
-    destination are resolved, invoke `$brosettlement-api`'s withdrawal fast path. The user's exact
-    instruction is confirmation for that one request; do not preflight permissions or ask again.
-13. For a withdrawal, use one immediate `GET /api/v1/transactions/{id}` as the required
-    verification. If it is non-terminal, report **withdrawal accepted; verification pending**,
-    return the retrieval command, and stop. Do not add account, wallet, authentication, balance,
-    Co-Signer, MPC, ledger-list, or WebSocket probes unless the returned transaction exposes a
-    concrete inconsistency. Optional checks must not block or delay the result.
+    destination are resolved, invoke `$brosettlement-api`'s `brosettlement withdraw` command once
+    with the cached wallet ID, trusted atomic amount, stable idempotency key, and `--confirm`. The
+    user's exact instruction is confirmation for that one request; do not preflight permissions,
+    refetch Swagger, or ask again. If only a public source address is supplied, reuse its wallet ID
+    from the onboarding result; perform one minimum wallet-resolution read only when that mapping
+    is genuinely unavailable.
+13. The command owns the single `POST /api/v1/transactions` and one immediate
+    `GET /api/v1/transactions/{id}`. Do not repeat either call. If verification is non-terminal or
+    unavailable, report **withdrawal accepted; verification pending**, return the retrieval
+    command, and stop. If the command reports `create_outcome_unknown`, state that the create may
+    have been accepted and must be reconciled before any retry; do not submit another POST. Include
+    the command's stage timings in diagnostics only when latency is
+    relevant. Do not add account, wallet, authentication, balance, Co-Signer, MPC, ledger-list, or
+    WebSocket probes unless the returned transaction exposes a concrete inconsistency. Optional
+    checks must not block or delay the result.
 14. Report the existing credential and MPC-share locations as described below. During normal
     onboarding, do not ask for a backup destination or copy, move, archive, upload, or display any
     secret. Use the protected archive exception only for an approved incompatible upgrade.

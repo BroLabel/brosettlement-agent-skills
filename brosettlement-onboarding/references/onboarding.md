@@ -27,7 +27,7 @@ Required API checkpoints:
 | DKG monitoring | `brosettlement mpc status` | MPC key and every chain selected for onboarding reach ready states |
 | Ledger account | Separate integration key: `POST /api/v1/ledger/accounts`, then `GET /api/v1/ledger/accounts/{accountId}` | Key has `accounts:create` and `accounts:read`; created resource is readable |
 | Wallet | Separate integration key: `POST /api/v1/wallets`, then `GET /api/v1/wallets/{walletId}` | Key also has `wallets:create` and `wallets:read`; wallet reaches `ACTIVE` |
-| Explicit withdrawal | `POST /api/v1/transactions`, then `GET /api/v1/transactions/{id}` | Create is sent once with stable idempotency; terminal lifecycle is read back when permitted |
+| Explicit withdrawal | One `brosettlement withdraw` invocation | Command sends one create with stable idempotency, then one immediate read-back when an ID is returned |
 
 Run the companion CLI update gate exactly once before the first API operation in an onboarding
 session; never repeat that environment-independent gate during the session. Fetch the current
@@ -85,7 +85,8 @@ a routine ledger-account or wallet operation, first inspect only the resolved co
 for that operation. Reuse an already established API environment, integration API Key ID reference,
 matching private-key path, successful API access evidence, and ledger-account selection when those
 facts are unambiguous. For a resolved post-onboarding withdrawal, route directly through
-`$brosettlement-api`; do not inspect or recheck installation, Co-Signer, or MPC state first.
+`$brosettlement-api`'s single-call `brosettlement withdraw` command; do not inspect or recheck
+installation, Co-Signer, or MPC state first, and do not repeat its create or verification request.
 
 Ask the account-access question, installation-folder question, and other setup questions only for a
 new onboarding or when the corresponding fact cannot be recovered safely. Never infer a credential
@@ -510,17 +511,25 @@ not remediate the file on the user's behalf.
 13. Offer a small withdrawal separately. Once the user supplies or accepts the exact source wallet,
     network, asset, amount, and destination, treat that as authorization for one operation. Reuse
     the established key/environment and wallet state; do not repeat account, wallet, authentication,
-    transaction-list, Co-Signer, MPC, or balance requests merely to probe permissions. Submit the
-    exact create once with stable idempotency. On `403 INSUFFICIENT_SCOPE`, request only the write
+    transaction-list, Co-Signer, MPC, or balance requests merely to probe permissions. Invoke
+    `brosettlement withdraw` once with the resolved wallet ID, trusted atomic amount, stable
+    idempotency key, and `--confirm`. The command sends the exact create once and owns the single
+    immediate verification GET. Reuse the source-address-to-wallet-ID mapping and asset metadata
+    learned earlier in onboarding; perform only the minimum resolution read when either is truly
+    unavailable. Do not refetch Swagger for this released command unless it is unavailable or the
+    API returns a contract/access error. On create `403 INSUFFICIENT_SCOPE`, request only the write
     scope required by current Swagger and stop until the user confirms the Console change. On
-    `403 IP_NOT_ALLOWED`, direct the user to the key's allowlist settings instead.
-14. After an accepted create, report its sanitized response and ID, then make one immediate
-    `GET /api/v1/transactions/{id}`. If it is non-terminal, report **withdrawal accepted;
-    verification pending**, return the retrieval command, and stop. If that GET returns
-    `403 INSUFFICIENT_SCOPE`, use the same pending wording, request only the required
-    transaction-read scope, and never submit the mutation again. Do not add account, wallet,
-    authentication, balance, Co-Signer, MPC, ledger-list, or WebSocket probes unless the returned
-    transaction exposes a concrete inconsistency.
+    create `403 IP_NOT_ALLOWED`, direct the user to the key's allowlist settings instead.
+14. After an accepted create, report the command's sanitized create response, ID, and single
+    verification result; never issue another GET or POST outside it. If verification is
+    non-terminal or unavailable, report **withdrawal accepted; verification pending**, return the
+    retrieval command, and stop. If the verification GET returned `403 INSUFFICIENT_SCOPE`, use
+    the same pending wording, request only the required transaction-read scope, and never submit
+    the mutation again. If the command reports `create_outcome_unknown`, say that the mutation may
+    have been accepted and requires reconciliation before any retry; never submit another POST
+    blindly. Do not add account, wallet, authentication, balance, Co-Signer, MPC,
+    ledger-list, or WebSocket probes unless the returned transaction exposes a concrete
+    inconsistency.
 
 ## Storage, backup, and recovery
 

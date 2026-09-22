@@ -7,14 +7,15 @@ AI agent skills and Go tooling for BroSettlement onboarding, API integration, We
 and client-controlled disaster recovery.
 
 > [!IMPORTANT]
-> The bundled API configuration targets the BroSettlement **staging environment**. A production
-> endpoint is intentionally not defined until Bro Label publishes and verifies it.
+> The bundled API configuration targets BroSettlement **production** by default. It switches to
+> staging only when the user explicitly says they are using staging or provides a staging Console
+> or API URL. Never mix credentials, URLs, or resources between environments.
 
 ## Included skills
 
 | Skill | Purpose |
 |---|---|
-| [`brosettlement-onboarding`](brosettlement-onboarding/) | Guides a user from account access through manual API-key creation, Co-Signer installation, MPC initialization, readiness checks, and the first testnet wallet. |
+| [`brosettlement-onboarding`](brosettlement-onboarding/) | Guides a user from account access through manual API-key creation, Co-Signer installation, MPC initialization, readiness checks, and the first wallet. |
 | [`brosettlement-api`](brosettlement-api/) | Discovers the current Swagger contract, sends Ed25519-signed REST requests, lists API operations, and listens to WebSocket events. |
 | [`brosettlement-disaster-recovery`](brosettlement-disaster-recovery/) | Runs a controlled Share B + Share C ceremony to create, threshold-sign, save, and broadcast one native TRX or standard TRC-20 recovery transfer without BroSettlement participation. |
 
@@ -69,8 +70,8 @@ modified skill without an explicit user request.
 
 ## Unified Go CLI
 
-The API skill includes one CLI for contract discovery, signed REST calls, MPC operations, and
-WebSocket events:
+The API skill includes one CLI for contract discovery, signed REST calls, guarded withdrawals,
+MPC operations, and WebSocket events:
 
 Use the portable command surface in an AI chat:
 
@@ -84,6 +85,11 @@ Use the portable command surface in an AI chat:
 
 # Signed REST request
 @brosettlement api GET '/api/v1/wallets'
+
+# Submit one withdrawal and verify it once
+@brosettlement withdraw --wallet-id '<wallet-id>' --asset USDT \
+  --to '<destination>' --amount-atomic '6000000' \
+  --idempotency-key '<stable-key>' --confirm
 
 # MPC status
 @brosettlement mpc status
@@ -103,6 +109,9 @@ cd brosettlement-api
 ./scripts/go/bin/brosettlement version
 ./scripts/go/bin/brosettlement commands wallets --json
 ./scripts/go/bin/brosettlement api GET /api/v1/mpc/status
+./scripts/go/bin/brosettlement withdraw --wallet-id '<wallet-id>' --asset USDT \
+  --to '<destination>' --amount-atomic '6000000' \
+  --idempotency-key '<stable-key>' --confirm
 ./scripts/go/bin/brosettlement mpc status
 ./scripts/go/bin/brosettlement websocket listen --stop-after 30s
 ```
@@ -115,8 +124,8 @@ Maintainers publish a CLI release by pushing an annotated semantic-version tag a
 commit is on `main`:
 
 ```bash
-git tag -a cli-v1.0.2 -m "BroSettlement CLI 1.0.2"
-git push origin cli-v1.0.2
+git tag -a cli-v1.0.3 -m "BroSettlement CLI 1.0.3"
+git push origin cli-v1.0.3
 ```
 
 The release workflow tests the CLI, cross-compiles the supported platform binaries, generates
@@ -135,6 +144,10 @@ yes/no question again:
 
 Transaction creation additionally requires an explicit stable `--idempotency-key`. This lets the
 agent reconcile an access error or uncertain response without risking a second logical transfer.
+The high-level `withdraw` command keeps the create and one immediate verification read in a single
+CLI process, reports per-stage timings, accepts only the official production or staging API
+origin, and never polls or retries the mutation. Transport failures and HTTP 5xx responses are
+reported as an unknown create outcome that must be reconciled instead of retried blindly.
 
 The signed commands load credentials at runtime:
 
