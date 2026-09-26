@@ -27,6 +27,9 @@ func TestRunHelp(t *testing.T) {
 	if !strings.Contains(stdout.String(), "brosettlement update [--auto]") {
 		t.Fatalf("help does not describe CLI updates: %s", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "brosettlement sign METHOD TARGET") {
+		t.Fatalf("help does not describe offline REST signing: %s", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "production by default") ||
 		!strings.Contains(stdout.String(), "BROSETTLEMENT_ENVIRONMENT=production|staging") {
 		t.Fatalf("help does not describe environment selection: %s", stdout.String())

@@ -86,6 +86,9 @@ Use the portable command surface in an AI chat:
 # Signed REST request
 @brosettlement api GET '/api/v1/wallets'
 
+# Generate signed headers without sending a request
+@brosettlement sign GET '/api/v1/wallets'
+
 # Create and verify resources without extra probes
 @brosettlement account create --name 'Treasury' \
   --external-id 'treasury-001' --confirm
@@ -125,6 +128,7 @@ cd brosettlement-api
 ./scripts/go/bin/brosettlement update --auto
 ./scripts/go/bin/brosettlement version
 ./scripts/go/bin/brosettlement commands wallets --json
+./scripts/go/bin/brosettlement sign GET /api/v1/mpc/status
 ./scripts/go/bin/brosettlement api GET /api/v1/mpc/status
 ./scripts/go/bin/brosettlement account create --name 'Treasury' \
   --external-id 'treasury-001' --confirm

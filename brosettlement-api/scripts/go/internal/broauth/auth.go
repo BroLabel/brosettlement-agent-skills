@@ -65,23 +65,46 @@ func randomNonce() (string, error) {
 }
 
 func RESTHeaders(method, requestTarget string, body []byte) (http.Header, string, error) {
+	return RESTHeadersWithInputs(method, requestTarget, body, "", "")
+}
+
+func RESTHeadersWithInputs(
+	method string,
+	requestTarget string,
+	body []byte,
+	timestamp string,
+	nonce string,
+) (http.Header, string, error) {
 	if !strings.HasPrefix(requestTarget, "/") {
 		return nil, "", errors.New("request target must begin with /")
+	}
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if method == "" {
+		return nil, "", errors.New("method is required")
+	}
+	if timestamp != "" && !validUnixSeconds(timestamp) {
+		return nil, "", errors.New("timestamp must be unsigned Unix seconds")
+	}
+	if nonce != "" && !validNonce(nonce) {
+		return nil, "", errors.New("nonce must contain 16-128 letters, digits, dots, underscores, tildes, or hyphens")
 	}
 	credentials, err := LoadCredentials()
 	if err != nil {
 		return nil, "", err
 	}
-	nonce, err := randomNonce()
-	if err != nil {
-		return nil, "", err
+	if nonce == "" {
+		nonce, err = randomNonce()
+		if err != nil {
+			return nil, "", err
+		}
 	}
 
-	method = strings.ToUpper(strings.TrimSpace(method))
-	timestamp := fmt.Sprintf("%d", time.Now().UTC().Unix())
+	if timestamp == "" {
+		timestamp = fmt.Sprintf("%d", time.Now().UTC().Unix())
+	}
 	bodyDigest := sha256.Sum256(body)
 	bodyHash := ""
-	if len(body) > 0 {
+	if len(body) > 0 || RequiresBodyHash(method, requestTarget) {
 		bodyHash = hex.EncodeToString(bodyDigest[:])
 	}
 	canonical := strings.Join([]string{
@@ -104,6 +127,38 @@ func RESTHeaders(method, requestTarget string, body []byte) (http.Header, string
 		headers.Set("X-Api-Body-Hash", bodyHash)
 	}
 	return headers, nonce, nil
+}
+
+func validUnixSeconds(value string) bool {
+	if value == "0" {
+		return true
+	}
+	if value == "" || value[0] < '1' || value[0] > '9' {
+		return false
+	}
+	for index := 1; index < len(value); index++ {
+		if value[index] < '0' || value[index] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func validNonce(value string) bool {
+	if len(value) < 16 || len(value) > 128 {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		character := value[index]
+		if (character >= 'a' && character <= 'z') ||
+			(character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') ||
+			strings.ContainsRune("._~-", rune(character)) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func SignedWebSocketURL(rawURL string) (string, error) {

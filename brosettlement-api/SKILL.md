@@ -208,6 +208,11 @@ surface instead of exposing the skill's internal executable path. Present comman
 # Signed REST request
 @brosettlement api GET '/api/v1/wallets'
 
+# Generate signed headers without sending a request
+@brosettlement sign POST '/api/v1/wallets' \
+  --body-file /secure/path/create-wallet.json \
+  --idempotency-key '<stable-key-for-this-logical-request>'
+
 # Create and verify one ledger account
 @brosettlement account create --name 'Treasury' \
   --external-id 'treasury-001' --confirm
@@ -309,17 +314,13 @@ Use the guarded convenience commands during onboarding:
   --confirm
 ```
 
-The dependency-free Node.js header generator remains available when only signing headers are
-needed:
-
-Use `scripts/sign-request.mjs` to produce request headers from an exact method, request target, and optional body file:
+When only signed headers are needed, use the same Go CLI so signing rules stay identical to sent
+requests:
 
 ```bash
 BROSETTLEMENT_API_KEY_ID="<uuid>" \
 BROSETTLEMENT_API_PRIVATE_KEY_FILE="/secure/path/private.pem" \
-node scripts/sign-request.mjs \
-  --method POST \
-  --target /api/v1/wallets \
+./scripts/go/bin/brosettlement sign POST /api/v1/wallets \
   --body-file /tmp/request.json \
   --idempotency-key "<stable-key-for-this-logical-request>"
 ```

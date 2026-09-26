@@ -14,6 +14,7 @@ Usage:
   brosettlement version [--json]
   brosettlement update [--auto]
   brosettlement commands [QUERY] [--json]
+  brosettlement sign METHOD TARGET [--body-file FILE] [--idempotency-key KEY]
   brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]
   brosettlement account create|show [options]
   brosettlement wallet create|show|resolve [options]
@@ -56,6 +57,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = runUpdate(args[1:], stdout, stderr)
 	case "commands":
 		err = runCommands(args[1:], stdout, stderr)
+	case "sign":
+		err = runSign(args[1:], stdout, stderr)
 	case "api":
 		err = runAPI(args[1:], stdout, stderr)
 	case "account":
