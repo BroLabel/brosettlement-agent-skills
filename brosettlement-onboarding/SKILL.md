@@ -378,6 +378,11 @@ confirmation required by the active agent before submitting it.
    ```text
    @brosettlement mpc status
    ```
+7. From the latest successful `GET /api/v1/mpc/status` response, read the complete `chains` array
+   and immediately show a compact **Ready networks** list containing every exact `chain` value whose
+   `status` is `READY`. Do not show only the tutorial-selected chain. If no entry is ready, state
+   **No networks are READY**. Do not infer readiness from local health or Console status, and do not
+   call the assets endpoint for this summary.
 
 Do not restart the process, rotate the API key, replace the share-encryption key, or alter the
 shares directory during DKG.
@@ -621,6 +626,9 @@ initialize a replacement MPC key as a backup procedure.
   blockchain network, and supported production host are separate choices; Linux remains the
   official production/mainnet Co-Signer runtime.
 - Do not treat local `ready: true` as end-to-end readiness. Also verify the Console heartbeat, MPC key status, and chain status.
+- At the post-DKG readiness checkpoint, visibly report every `chains[].chain` returned as `READY`
+  by the latest successful `GET /api/v1/mpc/status`; never collapse the result to only the selected
+  tutorial network or infer additional networks.
 - Do not create a wallet before MPC is ready.
 - Do not change the API key, share-encryption key, or shares directory while DKG or signing is active.
 - After successful DKG, use only a read-only existence check for Share C. If it remains on the
@@ -685,7 +693,7 @@ full onboarding report or list credential/share paths unless the user asked to r
 - Share B operational custody, separate Share C backup status, and the read-only Share C presence
   result. If Share C is still present, report the unresolved critical security gap without altering
   the file;
-- chain readiness;
+- all ready networks from the latest successful `GET /api/v1/mpc/status` response;
 - ledger account and wallet identifiers;
 - test transaction status;
 - exact paths and purposes of the credential files and encrypted shares, without showing values;

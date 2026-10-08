@@ -1,6 +1,6 @@
 GO_DIR := brosettlement-api/scripts/go
 RECOVERY_DIR := brosettlement-disaster-recovery/scripts
-CLI_VERSION ?= 1.0.4-dev
+CLI_VERSION ?= 1.0.4
 
 .PHONY: check validate lifecycle-test test vet build recovery-check
 

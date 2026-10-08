@@ -24,7 +24,7 @@ Required API checkpoints:
 | Co-Signer configured | `brosettlement api GET /api/v1/co-signer/intents/pending` | Raw Co-Signer API access; this does not prove local process health |
 | Before initialization | `brosettlement mpc status` | Current key and chain state recorded |
 | Initialize MPC | `brosettlement mpc initialize --idempotency-key <stable-key> --confirm` | Accepted idempotent initialization request after explicit confirmation |
-| DKG monitoring | `brosettlement mpc status` | MPC key and every chain selected for onboarding reach ready states |
+| DKG monitoring | `brosettlement mpc status` | MPC key and selected chains reach ready states; visibly list every exact `chains[].chain` whose status is `READY` |
 | Ledger account | Separate integration key: one `brosettlement account create --name <name> --external-id <stable-id> --confirm` invocation | Command sends one create, reconciles only when required, and reads the exact resource back |
 | Wallet | Separate integration key: one `brosettlement wallet create --account-id <id> --chain <chain> --idempotency-key <stable-key> --confirm` invocation | Command sends one create and one immediate read-back; `ACTIVE` is success |
 | Explicit withdrawal | One `brosettlement withdraw` invocation | Command sends one create with stable idempotency, then one immediate read-back when an ID is returned |
@@ -64,7 +64,8 @@ Follow these checkpoints in order:
    key ID protected.
 9. Co-Signer local health ready, raw Co-Signer API accessible, and Console status Online.
 10. MPC initialization explicitly started through the API skill and DKG completed.
-11. MPC key, Co-Signer, and selected-chain readiness verified through the API skill.
+11. MPC key and Co-Signer readiness verified through the API skill; every network returned as
+    `READY` by the latest `GET /api/v1/mpc/status` is shown to the user.
 12. Share C backup status recorded and its active-host path checked read-only. If Share C remains,
     the exact path and critical signing-quorum security gap are reported without changing files.
 13. Separate integration API key prepared with least-privilege account and wallet scopes.
@@ -363,6 +364,12 @@ Require all of the following before wallet creation:
 - MPC key: **Active** or **Ready**;
 - Co-Signer: **Online**;
 - selected chain: **Ready**.
+
+Immediately after the latest successful status read, inspect the complete `chains` array and show
+a compact **Ready networks** list with every exact `chain` value whose `status` is `READY`, not only
+the chain selected for the tutorial. If none are ready, state **No networks are READY**. This
+summary must come from `GET /api/v1/mpc/status`; do not infer it from local health, Console status,
+or the asset catalog.
 
 ### Post-DKG Share B / Share C custody checkpoint
 

@@ -12,7 +12,7 @@ import (
 // development version aligned with the next release so the updater never
 // replaces newer source code with an older published binary.
 var (
-	Version = "1.0.4-dev"
+	Version = "1.0.4"
 	Commit  = "unknown"
 )
 

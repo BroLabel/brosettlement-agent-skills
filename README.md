@@ -151,8 +151,8 @@ Maintainers publish a CLI release by pushing an annotated semantic-version tag a
 commit is on `main`:
 
 ```bash
-git tag -a cli-v1.0.3 -m "BroSettlement CLI 1.0.3"
-git push origin cli-v1.0.3
+git tag -a cli-v1.0.4 -m "BroSettlement CLI 1.0.4"
+git push origin cli-v1.0.4
 ```
 
 The release workflow tests the CLI, cross-compiles the supported platform binaries, generates
