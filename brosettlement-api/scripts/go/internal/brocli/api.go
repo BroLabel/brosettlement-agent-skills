@@ -37,7 +37,7 @@ func runAPI(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(stdout, "Usage: brosettlement api METHOD TARGET [--body-file FILE] [--idempotency-key KEY] [--confirm]")
 		fmt.Fprintln(stdout, "Non-read-only methods require --confirm.")
-		fmt.Fprintln(stdout, "POST /api/v1/wallets and POST /api/v1/transactions require an explicit stable --idempotency-key.")
+		fmt.Fprintln(stdout, "POST /api/v1/ledger/accounts, POST /api/v1/wallets, and POST /api/v1/transactions require an explicit stable --idempotency-key.")
 		fmt.Fprintln(stdout, "Non-read-only methods are sent once; automatic HTTP transport replay is disabled.")
 		return errHelp
 	}

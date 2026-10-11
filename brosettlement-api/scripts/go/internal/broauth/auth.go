@@ -201,6 +201,7 @@ func RequiresIdempotency(method, requestTarget string) bool {
 	path := requestPath(requestTarget)
 	if path == "/api/v1/mpc/initialize" ||
 		path == "/api/v1/wallets" ||
+		path == "/api/v1/ledger/accounts" ||
 		path == "/api/v1/transactions" {
 		return true
 	}
@@ -217,7 +218,7 @@ func RequiresExplicitIdempotencyKey(method, requestTarget string) bool {
 		return false
 	}
 	path := requestPath(requestTarget)
-	return path == "/api/v1/transactions" || path == "/api/v1/wallets"
+	return path == "/api/v1/transactions" || path == "/api/v1/wallets" || path == "/api/v1/ledger/accounts"
 }
 
 func NormalizeExplicitIdempotencyKey(method, requestTarget, value string) (string, error) {

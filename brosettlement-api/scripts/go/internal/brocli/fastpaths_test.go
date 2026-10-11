@@ -241,8 +241,8 @@ func TestAccountCreatePreservesExplicitEmptyMetadataAndReadsBack(t *testing.T) {
 			if string(body) != `{"name":"Treasury","externalId":"treasury-1","metadata":{}}` {
 				t.Fatalf("unexpected account body: %s", body)
 			}
-			if request.Header.Get("X-Idempotency-Key") != "" || request.GetBody != nil {
-				t.Fatal("account create sent an unsupported idempotency key or enabled replay")
+			if request.Header.Get("X-Idempotency-Key") != "account-create-1" || request.GetBody != nil {
+				t.Fatal("account create lost its stable key or enabled transport replay")
 			}
 			return jsonHTTPResponse(http.StatusCreated, `{"id":"account/1","name":"Treasury","externalId":"treasury-1","metadata":{}}`), nil
 		}
@@ -255,7 +255,7 @@ func TestAccountCreatePreservesExplicitEmptyMetadataAndReadsBack(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{
 		"account", "create", "--name", "Treasury", "--external-id", "treasury-1",
-		"--metadata-file", metadataPath, "--confirm",
+		"--metadata-file", metadataPath, "--idempotency-key", "account-create-1", "--confirm",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("Run returned %d: %s", code, stderr.String())
@@ -289,7 +289,7 @@ func TestAccountCreateReconcilesDocumentedExternalIDConflict(t *testing.T) {
 		}
 	})
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"account", "create", "--name", "Treasury", "--external-id", "treasury-1", "--confirm"}, &stdout, &stderr)
+	code := Run([]string{"account", "create", "--name", "Treasury", "--external-id", "treasury-1", "--idempotency-key", "account-create-1", "--confirm"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("Run returned %d: %s", code, stderr.String())
 	}
@@ -349,7 +349,7 @@ func TestAccountCreateUnknownOutcomeNeverRepeatsPOST(t *testing.T) {
 		return jsonHTTPResponse(http.StatusOK, `{"items":[],"nextCursor":null}`), nil
 	})
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"account", "create", "--name", "Treasury", "--external-id", "treasury-1", "--confirm"}, &stdout, &stderr)
+	code := Run([]string{"account", "create", "--name", "Treasury", "--external-id", "treasury-1", "--idempotency-key", "account-create-1", "--confirm"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("Run returned %d for unknown outcome: %s", code, stderr.String())
 	}

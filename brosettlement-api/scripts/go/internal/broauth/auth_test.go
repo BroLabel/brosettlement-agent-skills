@@ -127,3 +127,24 @@ func TestRejectsInvalidExplicitTransactionIdempotencyKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestAccountCreationRequiresNormalizedStableKey(t *testing.T) {
+	const target = "/api/v1/ledger/accounts?lang=en"
+	if !RequiresIdempotency("POST", target) {
+		t.Fatal("account creation requires an idempotency key")
+	}
+	key, err := NormalizeExplicitIdempotencyKey("post", target, "  account-create-1  ")
+	if err != nil || key != "account-create-1" {
+		t.Fatalf("normalized key = %q, error = %v", key, err)
+	}
+	if _, err := NormalizeExplicitIdempotencyKey("POST", target, ""); err == nil {
+		t.Fatal("account creation accepted a missing key")
+	}
+	key, err = NormalizeExplicitIdempotencyKey("POST", target, strings.Repeat("a", 128))
+	if err != nil || len(key) != 128 {
+		t.Fatalf("128-byte key was rejected: %v", err)
+	}
+	if _, err := NormalizeExplicitIdempotencyKey("GET", target, ""); err != nil {
+		t.Fatalf("read-only account request requires a key: %v", err)
+	}
+}

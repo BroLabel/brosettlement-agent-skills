@@ -65,6 +65,11 @@ valid for this operation.
 
 ## Idempotency
 
+The CLI requires an explicit stable `--idempotency-key` for account, wallet, and transaction
+creation, including generic `api` and offline `sign` commands. Keys are trimmed, non-empty,
+printable ASCII, and at most 128 bytes. Generate one key per logical creation and retain the exact
+payload and key across scope fixes or controlled retries.
+
 The current OpenAPI requires `X-Idempotency-Key` for:
 
 - `POST /api/v1/transactions`
@@ -72,6 +77,13 @@ The current OpenAPI requires `X-Idempotency-Key` for:
 - `POST /api/v1/mpc/initialize`
 - `POST /api/v1/co-signer/intents/{intentId}/claim`
 - `POST /api/v1/co-signer/sessions/{sessionId}/messages`
+
+The BROSET-150 account-creation backend contract additionally requires the header for
+`POST /api/v1/ledger/accounts`. An identical payload and key return HTTP 201 with the same account
+ID and current data; reusing the key with a different payload returns `409 IDEMPOTENCY_CONFLICT`.
+Confirm that the selected environment's live Swagger advertises this contract before relying on
+server replay protection. Older servers accept the extra header but do not deduplicate by it;
+use exact external-ID reconciliation and stop if the result remains uncertain.
 
 Use one unique key per logical operation and retain it until the outcome is known. After a timeout
 or another unknown outcome, inspect the existing resource or status before any retry. If a retry is
@@ -201,8 +213,8 @@ Run from `scripts/go`:
 | `go run ./cmd/brosettlement mpc initialize --confirm [options]` | Send the verified staging-compatible idempotent initialization request. |
 | `go run ./cmd/brosettlement websocket listen --stop-after 30s [options]` | Run a bounded synchronous listener, reconnect as needed, and record events as JSONL. |
 
-`POST /api/v1/wallets` and `POST /api/v1/transactions` require an explicit stable
-`--idempotency-key`; the CLI does not generate a throwaway key for either create. This preserves
+`POST /api/v1/ledger/accounts`, `POST /api/v1/wallets`, and `POST /api/v1/transactions` require an
+explicit stable `--idempotency-key`; the CLI does not generate a throwaway key for these creates. This preserves
 the exact logical request for scope-fix retries and unknown-outcome reconciliation.
 
 The guarded high-level form is:
@@ -221,7 +233,8 @@ Other guarded high-level forms are:
 
 ```bash
 go run ./cmd/brosettlement account create \
-  --name 'Treasury' --external-id 'treasury-001' --confirm
+  --name 'Treasury' --external-id 'treasury-001' \
+  --idempotency-key '<account-create-key>' --confirm
 
 go run ./cmd/brosettlement wallet create \
   --account-id '<account-id>' --chain tron:nile \
@@ -234,9 +247,11 @@ go run ./cmd/brosettlement transaction status --id '<transaction-id>'
 go run ./cmd/brosettlement transaction wait --id '<transaction-id>' --timeout 30s
 ```
 
-`account create` has no server idempotency contract. Its high-level command therefore requires a
-stable external ID, sends one POST only, and uses exact external-ID lookup plus read-back to
-reconcile conflicts or uncertain outcomes. `wallet create` requires an explicit stable
+`account create` requires a stable external ID and explicit idempotency key, sends one POST only,
+and uses exact external-ID lookup plus read-back to reconcile conflicts or uncertain outcomes.
+An accepted create or replay is verified by its immutable account ID because the backend returns
+current mutable fields rather than the original payload snapshot. HTTP 201 and the CLI's
+`created` flag do not distinguish the first insert from a replay. `wallet create` requires an explicit stable
 idempotency key, never substitutes a generated throwaway key, and performs one immediate read-back
 without polling an undocumented wallet state. Resolver commands exhaust cursor pages before
 deciding uniqueness. Transaction waiting is sequential, uses a fresh signature per GET, and has a
@@ -315,8 +330,9 @@ the current turn.
    destination, asset, amount, and network authorizes only that one withdrawal and requires no
    duplicate confirmation. Using the production API does not itself mean mainnet.
 6. Send the mutation once. Use a caller-supplied stable idempotency key whenever the contract
-   supports or requires it. Account creation has no server idempotency contract, so its high-level
-   command instead requires a stable external ID and never repeats the POST. Use the corresponding
+   supports or requires it. Account creation requires both a stable external ID and explicit
+   idempotency key; retain both with the unchanged creation payload. It never repeats the POST
+   automatically. Use the corresponding
    high-level command so its mutation and fixed read-back stay within one process.
 7. Let a high-level command own its documented read-back; do not repeat it outside the command. For
    a generic operation, verify the resulting resource or lifecycle through REST and, when relevant,

@@ -67,9 +67,11 @@ for the complete error and retry rules.
 For common resource operations, prefer the installed high-level CLI commands over composing
 multiple generic `api` calls:
 
-- `account create` sends one non-idempotent POST, requires a stable `externalId`, reads the result
-  back, and uses that business identifier only to reconcile a documented conflict or unknown
-  outcome. It never repeats the POST automatically.
+- `account create` requires an explicit stable `--idempotency-key` and a stable `externalId`,
+  sends one POST, and reads the returned account ID back. Generate the key once per logical
+  creation and retain the same name, external ID, metadata, and key across scope fixes or controlled
+  retries. Exact external-ID lookup reconciles a documented conflict or unknown outcome. The
+  command never repeats the POST automatically.
 - `wallet create` requires a caller-supplied stable idempotency key, sends one POST, and performs
   exactly one immediate read-back. It does not poll because the current wallet contract exposes
   no documented non-terminal status.
@@ -215,7 +217,7 @@ surface instead of exposing the skill's internal executable path. Present comman
 
 # Create and verify one ledger account
 @brosettlement account create --name 'Treasury' \
-  --external-id 'treasury-001' --confirm
+  --external-id 'treasury-001' --idempotency-key '<account-create-key>' --confirm
 
 # Create and verify one wallet
 @brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
@@ -326,7 +328,8 @@ BROSETTLEMENT_API_PRIVATE_KEY_FILE="/secure/path/private.pem" \
 ```
 
 Send the same bytes from `--body-file`; reformatting JSON after signing invalidates the body hash and signature.
-For `POST /api/v1/wallets` and `POST /api/v1/transactions`, `--idempotency-key` is mandatory so a
+For `POST /api/v1/ledger/accounts`, `POST /api/v1/wallets`, and `POST /api/v1/transactions`,
+`--idempotency-key` is mandatory so a
 rejected or uncertain create can be reconciled safely without generating a different key. For
 other documented idempotent operations, the generator adds `req-<nonce>` when the option is
 omitted. Pass an explicit stable key whenever an operation may need a controlled retry.
@@ -369,7 +372,7 @@ Use these commands when their inputs are known:
 
 ```text
 @brosettlement account create --name 'Treasury' \
-  --external-id 'treasury-001' --confirm
+  --external-id 'treasury-001' --idempotency-key '<account-create-key>' --confirm
 
 @brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
   --idempotency-key '<stable-key>' --confirm
@@ -382,7 +385,12 @@ Use these commands when their inputs are known:
 ```
 
 Treat `account create` reconciliation as evidence that the requested resource already exists, not
-as proof that the current POST created it. For `wallet create`, reuse the same idempotency key only
+as proof that the current POST created it. Under the BROSET-150 backend contract, account replay
+returns HTTP 201 with the same ID and current mutable fields; verification uses that immutable ID.
+Neither HTTP 201 nor the CLI's `created` flag distinguishes the original insert from a replay.
+Account replay protection depends on the selected environment's backend contract; older servers
+may accept the header without deduplicating. Use exact reconciliation and stop on uncertainty
+when that contract is absent. For `wallet create`, reuse the same idempotency key only
 with the identical account and chain. Accepted or outcome-unknown mutations must never be repeated
 blindly. `transaction wait` is read-only, sequential, and bounded to two minutes. Do not offer a
 generic deposit waiter: the current contract cannot always identify one deposit unambiguously from

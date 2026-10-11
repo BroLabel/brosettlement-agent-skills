@@ -91,7 +91,7 @@ Use the portable command surface in an AI chat:
 
 # Create and verify resources without extra probes
 @brosettlement account create --name 'Treasury' \
-  --external-id 'treasury-001' --confirm
+  --external-id 'treasury-001' --idempotency-key '<account-create-key>' --confirm
 @brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
   --idempotency-key '<stable-key>' --confirm
 
@@ -131,7 +131,7 @@ cd brosettlement-api
 ./scripts/go/bin/brosettlement sign GET /api/v1/mpc/status
 ./scripts/go/bin/brosettlement api GET /api/v1/mpc/status
 ./scripts/go/bin/brosettlement account create --name 'Treasury' \
-  --external-id 'treasury-001' --confirm
+  --external-id 'treasury-001' --idempotency-key '<account-create-key>' --confirm
 ./scripts/go/bin/brosettlement wallet create --account-id '<account-id>' --chain tron:nile \
   --idempotency-key '<stable-key>' --confirm
 ./scripts/go/bin/brosettlement wallet show --wallet-id '<wallet-id>' --asset USDT
@@ -169,9 +169,11 @@ yes/no question again:
   --confirm
 ```
 
-Wallet and transaction creation additionally require an explicit stable `--idempotency-key`. This
+Account, wallet, and transaction creation additionally require an explicit stable `--idempotency-key`. This
 lets the agent reconcile an access error or uncertain response without risking a second logical
-operation.
+operation. Retain the same key and creation payload across scope fixes and controlled retries.
+Account replay protection requires a backend implementing the BROSET-150 contract; older servers
+accept the header but do not deduplicate account creation by it.
 The high-level `withdraw` command keeps the create and one immediate verification read in a single
 CLI process, reports per-stage timings, accepts only the official production or staging API
 origin, and never polls or retries the mutation. Transport failures and HTTP 5xx responses are
