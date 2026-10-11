@@ -25,7 +25,7 @@ Required API checkpoints:
 | Before initialization | `brosettlement mpc status` | Current key and chain state recorded |
 | Initialize MPC | `brosettlement mpc initialize --idempotency-key <stable-key> --confirm` | Accepted idempotent initialization request after explicit confirmation |
 | DKG monitoring | `brosettlement mpc status` | MPC key and selected chains reach ready states; visibly list every exact `chains[].chain` whose status is `READY` |
-| Ledger account | Separate integration key: one `brosettlement account create --name <name> --external-id <stable-id> --confirm` invocation | Command sends one create, reconciles only when required, and reads the exact resource back |
+| Ledger account | Separate integration key: one `brosettlement account create --name <name> --external-id <stable-id> --idempotency-key <account-create-key> --confirm` invocation | Command sends one create with a stable key, reconciles only when required, and reads the exact resource back |
 | Wallet | Separate integration key: one `brosettlement wallet create --account-id <id> --chain <chain> --idempotency-key <stable-key> --confirm` invocation | Command sends one create and one immediate read-back; `ACTIVE` is success |
 | Explicit withdrawal | One `brosettlement withdraw` invocation | Command sends one create with stable idempotency, then one immediate read-back when an ID is returned |
 
@@ -464,7 +464,10 @@ not remediate the file on the user's behalf.
    or the server explicitly reports contract drift. Never repeat the environment-independent CLI
    gate for the wallet.
 7. For a new full onboarding, run `brosettlement account create --name <name> --external-id
-   <stable-id> --confirm` through `$brosettlement-api`. The command owns the one create, exact
+   <stable-id> --idempotency-key <account-create-key> --confirm` through `$brosettlement-api`.
+   Generate the key once for this logical creation and preserve the same key, name, external ID,
+   and metadata across scope fixes or controlled retries. Never generate a new key after an
+   uncertain response. The command owns the one create, exact
    reconciliation when required, and one read-back. Do not repeat those requests. Require its
    verified account ID before stating that creation succeeded; show the sanitized response and
    returned fields, and explain that all accounts can be listed with:

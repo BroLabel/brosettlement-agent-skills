@@ -478,7 +478,10 @@ After MPC readiness:
    gate for the wallet after the account command completes.
 7. For a new full onboarding, briefly say that the first ledger account is being created. Use the
    `$brosettlement-api` high-level command `brosettlement account create --name <name>
-   --external-id <stable-id> --confirm`. When the user did not choose tutorial names, use a clear
+   --external-id <stable-id> --idempotency-key <account-create-key> --confirm`. Generate one unique
+   idempotency key for this logical account creation and retain it with the unchanged name,
+   external ID, and metadata across scope fixes or any justified retry; never generate a new key
+   after an uncertain response. When the user did not choose tutorial names, use a clear
    default such as `Testnet Treasury` and generate a unique `externalId`; do not interrupt the flow
    merely to approve those harmless defaults. Pass `--confirm` under the standing onboarding
    authorization above without asking the user again. The command owns its single POST, exact

@@ -13,23 +13,26 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/BroLabel/brosettlement-agent-skills/brosettlement-api/scripts/go/internal/broauth"
 )
 
 const accountHelp = `Usage:
-  brosettlement account create --name NAME --external-id ID --confirm [--metadata-file FILE]
+  brosettlement account create --name NAME --external-id ID --idempotency-key KEY --confirm [--metadata-file FILE]
   brosettlement account show --account-id ID
 
-create sends exactly one POST and never retries it. Because account creation has
-no server idempotency contract, --external-id is mandatory and is used only to
-reconcile a conflict or uncertain outcome through a safe exact lookup.`
+create sends exactly one POST and never retries it automatically. Reuse the same
+stable --idempotency-key only with the identical creation payload. --external-id
+is mandatory for safe exact reconciliation of conflicts or uncertain outcomes.`
 
 type accountCreateOptions struct {
-	baseURL      string
-	name         string
-	externalID   string
-	metadataFile string
-	timeout      time.Duration
-	confirmed    bool
+	baseURL        string
+	name           string
+	externalID     string
+	metadataFile   string
+	idempotencyKey string
+	timeout        time.Duration
+	confirmed      bool
 }
 
 type accountCreateRequest struct {
@@ -88,6 +91,7 @@ func runAccountCreate(args []string, stdout, stderr io.Writer) error {
 	flags.StringVar(&options.name, "name", "", "Ledger account name")
 	flags.StringVar(&options.externalID, "external-id", "", "Stable external account identifier")
 	flags.StringVar(&options.metadataFile, "metadata-file", "", "Optional JSON object file")
+	flags.StringVar(&options.idempotencyKey, "idempotency-key", "", "Stable logical-operation key")
 	flags.DurationVar(&options.timeout, "timeout", 30*time.Second, "Per-request HTTP timeout")
 	flags.BoolVar(&options.confirmed, "confirm", false, "Confirm ledger account creation")
 	if err := flags.Parse(args); err != nil {
@@ -124,6 +128,11 @@ func validateAndMarshalAccountCreate(options *accountCreateOptions) ([]byte, err
 	if err := validateAPIBaseURL(options.baseURL); err != nil {
 		return nil, err
 	}
+	normalized, err := broauth.NormalizeStableIdempotencyKey(options.idempotencyKey)
+	if err != nil {
+		return nil, fmt.Errorf("POST /api/v1/ledger/accounts %w", err)
+	}
+	options.idempotencyKey = normalized
 	payload := accountCreateRequest{Name: options.name, ExternalID: options.externalID}
 	if options.metadataFile != "" {
 		data, err := os.ReadFile(options.metadataFile)
@@ -162,7 +171,7 @@ func executeAccountCreate(options accountCreateOptions, body []byte, stdout io.W
 	}
 	createStart := time.Now()
 	createResponse, createErr := sendSignedAPIRequest(
-		client, options.baseURL, http.MethodPost, "/api/v1/ledger/accounts", body, "", true,
+		client, options.baseURL, http.MethodPost, "/api/v1/ledger/accounts", body, options.idempotencyKey, true,
 	)
 	result.DurationMS.Create = time.Since(createStart).Milliseconds()
 	if createErr == nil {
@@ -215,8 +224,9 @@ func executeAccountCreate(options accountCreateOptions, body []byte, stdout io.W
 			if verificationErr == nil {
 				result.VerificationResponse = &verificationResponse
 			}
+			// Replays return current mutable fields, so verify the immutable account ID.
 			if verificationErr == nil && verificationResponse.StatusCode == http.StatusOK &&
-				accountResponseMatches(verificationResponse.Body, result.AccountID, requested) {
+				transactionStringField(verificationResponse.Body, "id") == result.AccountID {
 				result.State = "created"
 				result.DurationMS.Total = time.Since(totalStart).Milliseconds()
 				return writeJSON(stdout, result, "account create")
